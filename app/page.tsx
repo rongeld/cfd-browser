@@ -1923,7 +1923,7 @@ const CFDSimulator = () => {
                   <input
                     type="range"
                     min="0"
-                    max="15"
+                    max="200"
                     step="0.5"
                     value={settings.windSpeed}
                     onChange={(e) =>
@@ -1963,7 +1963,7 @@ const CFDSimulator = () => {
                   <input
                     type="range"
                     min="100"
-                    max="30000"
+                    max="50000"
                     step="100"
                     value={settings.particleCount}
                     onChange={(e) =>
