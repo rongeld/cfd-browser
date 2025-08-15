@@ -83,7 +83,7 @@ const CFDSimulator = () => {
       low: { width: 80, height: 40, cellSize: 10 },
       medium: { width: 120, height: 60, cellSize: 8 },
       high: { width: 160, height: 80, cellSize: 6 },
-      ultra: { width: 200, height: 100, cellSize: 5 },
+      ultra: { width: 300, height: 200, cellSize: 4 },
     };
     const settings = qualitySettings[quality];
     return {
@@ -129,12 +129,12 @@ const CFDSimulator = () => {
     simulationState.current.particles = particles;
   }, [CELL_SIZE, GRID_HEIGHT, GRID_WIDTH]); // Remove dependency - will be called manually when needed
 
-  // Initialize obstacles (start with no obstacles)
+  // Initialize obstacles (start with no obstacles) - only called on first load or quality change
   const initializeObstacles = useCallback(() => {
     const obstacles = simulationState.current.obstacles;
     obstacles.fill(false);
 
-    // Optional: Add default circular obstacle
+    // Optional: Add default circular obstacle only on initial load
     if (settingsRef.current.obstacleSize > 0) {
       const centerX = Math.floor(GRID_WIDTH * 0.3);
       const centerY = Math.floor(GRID_HEIGHT * 0.5);
@@ -150,7 +150,7 @@ const CFDSimulator = () => {
         }
       }
     }
-  }, [CELL_SIZE, GRID_HEIGHT, GRID_WIDTH]); // Remove dependency - will be called manually when needed
+  }, [CELL_SIZE, GRID_HEIGHT, GRID_WIDTH]);
 
   // Get grid index from coordinates
   const getIndex = (x, y) => {
@@ -1221,8 +1221,6 @@ const CFDSimulator = () => {
 
   const clearObstacles = () => {
     simulationState.current.obstacles.fill(false);
-    setBezierPoints([]);
-    setCurrentBezier([]);
     if (!isRunning) {
       render();
     }
@@ -1285,9 +1283,11 @@ const CFDSimulator = () => {
       // Simulation state will auto-reinitialize due to grid size change
       initializeObstacles();
       initializeParticles();
-      render();
+      if (!isRunning) {
+        render();
+      }
     }, 100);
-  }, [quality, initializeObstacles, initializeParticles, render]); // Include function dependencies
+  }, [quality, initializeObstacles, initializeParticles]); // Remove render from dependencies
 
   // Re-render when drawing mode, visualization, or settings change (without restarting simulation)
   useEffect(() => {
@@ -1725,7 +1725,7 @@ const CFDSimulator = () => {
                   <input
                     type="range"
                     min="100"
-                    max="20000"
+                    max="30000"
                     step="100"
                     value={settings.particleCount}
                     onChange={(e) =>
