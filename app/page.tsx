@@ -1,5 +1,11 @@
 "use client";
-import React, { useRef, useEffect, useState, useCallback } from "react";
+import React, {
+  useRef,
+  useEffect,
+  useState,
+  useCallback,
+  useMemo,
+} from "react";
 import {
   Play,
   Pause,
@@ -41,37 +47,61 @@ const CFDSimulator = () => {
   const [bezierPoints, setBezierPoints] = useState([]);
   const [currentBezier, setCurrentBezier] = useState([]);
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0); // 0.5x, 1x, 1.25x, 1.5x, 2x
+  const [colorMode, setColorMode] = useState("speed"); // 'speed' or 'pressure'
+  const [showScale, setShowScale] = useState(true);
+  const [analysisPoint, setAnalysisPoint] = useState(null);
+  const [analysisData, setAnalysisData] = useState(null);
 
-  // Grid dimensions based on quality
-  const getGridDimensions = () => {
+  // Use refs to access current analysis data in render function
+  const analysisPointRef = useRef(null);
+  const analysisDataRef = useRef(null);
+  const colorModeRef = useRef(colorMode);
+  const showScaleRef = useRef(showScale);
+  const drawingModeRef = useRef(drawingMode);
+  const currentBezierRef = useRef(currentBezier);
+
+  // Update refs when state changes
+  useEffect(() => {
+    analysisPointRef.current = analysisPoint;
+    analysisDataRef.current = analysisData;
+    colorModeRef.current = colorMode;
+    showScaleRef.current = showScale;
+    drawingModeRef.current = drawingMode;
+    currentBezierRef.current = currentBezier;
+  }, [
+    analysisPoint,
+    analysisData,
+    colorMode,
+    showScale,
+    drawingMode,
+    currentBezier,
+  ]);
+
+  // Grid dimensions based on quality - use useMemo to recalculate when quality changes
+  const { GRID_WIDTH, GRID_HEIGHT, CELL_SIZE } = useMemo(() => {
     const qualitySettings = {
       low: { width: 80, height: 40, cellSize: 10 },
       medium: { width: 120, height: 60, cellSize: 8 },
       high: { width: 160, height: 80, cellSize: 6 },
       ultra: { width: 200, height: 100, cellSize: 5 },
     };
-    return qualitySettings[quality];
-  };
+    const settings = qualitySettings[quality];
+    return {
+      GRID_WIDTH: settings.width,
+      GRID_HEIGHT: settings.height,
+      CELL_SIZE: settings.cellSize,
+    };
+  }, [quality]);
 
-  const {
-    width: GRID_WIDTH,
-    height: GRID_HEIGHT,
-    cellSize: CELL_SIZE,
-  } = getGridDimensions();
+  // Simulation state - initialize with current grid dimensions
+  const simulationState = useRef(null);
 
-  // Simulation state
-  const simulationState = useRef({
-    velocityX: new Array(GRID_WIDTH * GRID_HEIGHT).fill(0),
-    velocityY: new Array(GRID_WIDTH * GRID_HEIGHT).fill(0),
-    pressure: new Array(GRID_WIDTH * GRID_HEIGHT).fill(0),
-    obstacles: new Array(GRID_WIDTH * GRID_HEIGHT).fill(false),
-    particles: [],
-    currentGridWidth: GRID_WIDTH,
-    currentGridHeight: GRID_HEIGHT,
-  });
-
-  // Reinitialize simulation when quality changes
-  const reinitializeSimulation = useCallback(() => {
+  // Initialize simulation state if not already done or if grid size changed
+  if (
+    !simulationState.current ||
+    simulationState.current.currentGridWidth !== GRID_WIDTH ||
+    simulationState.current.currentGridHeight !== GRID_HEIGHT
+  ) {
     const gridSize = GRID_WIDTH * GRID_HEIGHT;
     simulationState.current = {
       velocityX: new Array(gridSize).fill(0),
@@ -82,7 +112,7 @@ const CFDSimulator = () => {
       currentGridWidth: GRID_WIDTH,
       currentGridHeight: GRID_HEIGHT,
     };
-  }, [GRID_WIDTH, GRID_HEIGHT]);
+  }
 
   // Initialize particles
   const initializeParticles = useCallback(() => {
@@ -97,7 +127,7 @@ const CFDSimulator = () => {
       });
     }
     simulationState.current.particles = particles;
-  }, []); // Remove dependency - will be called manually when needed
+  }, [CELL_SIZE, GRID_HEIGHT, GRID_WIDTH]); // Remove dependency - will be called manually when needed
 
   // Initialize obstacles (start with no obstacles)
   const initializeObstacles = useCallback(() => {
@@ -120,7 +150,7 @@ const CFDSimulator = () => {
         }
       }
     }
-  }, []); // Remove dependency - will be called manually when needed
+  }, [CELL_SIZE, GRID_HEIGHT, GRID_WIDTH]); // Remove dependency - will be called manually when needed
 
   // Get grid index from coordinates
   const getIndex = (x, y) => {
@@ -272,7 +302,7 @@ const CFDSimulator = () => {
     const { velocityX, velocityY, obstacles } = simulationState.current;
     const alpha = settingsRef.current.viscosity;
 
-    for (let field of [velocityX, velocityY]) {
+    for (const field of [velocityX, velocityY]) {
       const newField = [...field];
       for (let i = 1; i < GRID_WIDTH - 1; i++) {
         for (let j = 1; j < GRID_HEIGHT - 1; j++) {
@@ -304,8 +334,20 @@ const CFDSimulator = () => {
     ctx.fillStyle = visualizationMode === "pressure" ? "#000011" : "#0a0a0a";
     ctx.fillRect(0, 0, width, height);
 
-    const { velocityX, velocityY, pressure, obstacles, particles } =
-      simulationState.current;
+    const {
+      velocityX,
+      velocityY,
+      pressure,
+      obstacles,
+      particles,
+      currentGridWidth,
+      currentGridHeight,
+    } = simulationState.current;
+
+    // Use current grid dimensions from simulation state
+    const CURRENT_GRID_WIDTH = currentGridWidth;
+    const CURRENT_GRID_HEIGHT = currentGridHeight;
+    const CURRENT_CELL_SIZE = CELL_SIZE;
 
     if (visualizationMode === "pressure") {
       // Enhanced pressure visualization mode
@@ -522,14 +564,64 @@ const CFDSimulator = () => {
 
       // Draw particles
       if (settingsRef.current.showParticles) {
+        // Find max speed and pressure range for color scaling
+        let maxSpeed = 0;
+        let minPressure = Infinity;
+        let maxPressure = -Infinity;
+
         particles.forEach((particle) => {
           const speed = Math.sqrt(
             particle.vx * particle.vx + particle.vy * particle.vy
           );
-          const hue = 60 + speed * 30;
-          const alpha = particle.life * 0.8;
+          maxSpeed = Math.max(maxSpeed, speed);
 
-          ctx.fillStyle = `hsla(${hue}, 80%, 60%, ${alpha})`;
+          if (colorModeRef.current === "pressure") {
+            const gridX = Math.floor(particle.x / CELL_SIZE);
+            const gridY = Math.floor(particle.y / CELL_SIZE);
+            if (
+              gridX >= 0 &&
+              gridX < GRID_WIDTH &&
+              gridY >= 0 &&
+              gridY < GRID_HEIGHT
+            ) {
+              const idx = gridY * GRID_WIDTH + gridX;
+              const p = pressure[idx];
+              minPressure = Math.min(minPressure, p);
+              maxPressure = Math.max(maxPressure, p);
+            }
+          }
+        });
+
+        particles.forEach((particle) => {
+          const alpha = particle.life * 0.8;
+          let color;
+
+          if (colorModeRef.current === "speed") {
+            const speed = Math.sqrt(
+              particle.vx * particle.vx + particle.vy * particle.vy
+            );
+            color = getSpeedColor(speed, maxSpeed);
+          } else {
+            // Pressure mode
+            const gridX = Math.floor(particle.x / CELL_SIZE);
+            const gridY = Math.floor(particle.y / CELL_SIZE);
+            if (
+              gridX >= 0 &&
+              gridX < GRID_WIDTH &&
+              gridY >= 0 &&
+              gridY < GRID_HEIGHT
+            ) {
+              const idx = gridY * GRID_WIDTH + gridX;
+              const p = pressure[idx];
+              color = getPressureColor(p, minPressure, maxPressure);
+            } else {
+              color = "hsl(120, 50%, 50%)";
+            }
+          }
+
+          ctx.fillStyle = color
+            .replace("hsl(", "hsla(")
+            .replace(")", `, ${alpha})`);
           ctx.beginPath();
           ctx.arc(particle.x, particle.y, 1.5, 0, Math.PI * 2);
           ctx.fill();
@@ -539,7 +631,7 @@ const CFDSimulator = () => {
 
     // Draw obstacles (same for both modes)
     ctx.fillStyle =
-      drawingMode === "draw"
+      drawingModeRef.current === "draw"
         ? "#ff6b6b"
         : visualizationMode === "pressure"
         ? "#222"
@@ -554,13 +646,16 @@ const CFDSimulator = () => {
     }
 
     // Draw bezier curve preview
-    if (drawingMode === "bezier" && currentBezier.length > 0) {
+    if (
+      drawingModeRef.current === "bezier" &&
+      currentBezierRef.current.length > 0
+    ) {
       ctx.strokeStyle = "#00ff00";
       ctx.lineWidth = 2;
       ctx.setLineDash([5, 5]);
 
       // Draw control points
-      currentBezier.forEach((point, index) => {
+      currentBezierRef.current.forEach((point, index) => {
         ctx.fillStyle = index === 0 || index === 3 ? "#00ff00" : "#ffff00";
         ctx.beginPath();
         ctx.arc(point.x, point.y, 4, 0, Math.PI * 2);
@@ -568,18 +663,312 @@ const CFDSimulator = () => {
       });
 
       // Draw preview curve if we have enough points
-      if (currentBezier.length >= 2) {
+      if (currentBezierRef.current.length >= 2) {
         ctx.beginPath();
-        ctx.moveTo(currentBezier[0].x, currentBezier[0].y);
-        for (let i = 1; i < currentBezier.length; i++) {
-          ctx.lineTo(currentBezier[i].x, currentBezier[i].y);
+        ctx.moveTo(
+          currentBezierRef.current[0].x,
+          currentBezierRef.current[0].y
+        );
+        for (let i = 1; i < currentBezierRef.current.length; i++) {
+          ctx.lineTo(
+            currentBezierRef.current[i].x,
+            currentBezierRef.current[i].y
+          );
         }
         ctx.stroke();
       }
 
       ctx.setLineDash([]);
     }
-  }, []); // Remove dependencies - render function will use current state via closure
+
+    // Draw color scale/legend
+    if (showScaleRef.current && settingsRef.current.showParticles) {
+      const scaleWidth = 200;
+      const scaleHeight = 20;
+      const scaleX = width - scaleWidth - 20;
+      const scaleY = 20;
+
+      // Calculate current min/max values
+      let minValue = Infinity;
+      let maxValue = -Infinity;
+
+      if (colorModeRef.current === "speed") {
+        particles.forEach((particle) => {
+          const speed = Math.sqrt(
+            particle.vx * particle.vx + particle.vy * particle.vy
+          );
+          minValue = Math.min(minValue, speed);
+          maxValue = Math.max(maxValue, speed);
+        });
+      } else {
+        for (let i = 0; i < GRID_WIDTH * GRID_HEIGHT; i++) {
+          if (!obstacles[i]) {
+            minValue = Math.min(minValue, pressure[i]);
+            maxValue = Math.max(maxValue, pressure[i]);
+          }
+        }
+      }
+
+      // Note: minValue and maxValue are used directly below for scale labels
+
+      // Background
+      ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
+      ctx.fillRect(scaleX - 10, scaleY - 5, scaleWidth + 20, scaleHeight + 50);
+
+      // Scale gradient
+      const gradient = ctx.createLinearGradient(
+        scaleX,
+        0,
+        scaleX + scaleWidth,
+        0
+      );
+
+      if (colorModeRef.current === "speed") {
+        gradient.addColorStop(0, "hsl(240, 80%, 60%)"); // Blue (low speed)
+        gradient.addColorStop(0.5, "hsl(120, 80%, 60%)"); // Green (medium speed)
+        gradient.addColorStop(1, "hsl(60, 80%, 60%)"); // Yellow/Red (high speed)
+      } else {
+        gradient.addColorStop(0, "hsl(240, 80%, 60%)"); // Blue (low pressure)
+        gradient.addColorStop(0.5, "hsl(120, 50%, 50%)"); // Green (neutral)
+        gradient.addColorStop(1, "hsl(0, 80%, 60%)"); // Red (high pressure)
+      }
+
+      ctx.fillStyle = gradient;
+      ctx.fillRect(scaleX, scaleY, scaleWidth, scaleHeight);
+
+      // Scale border
+      ctx.strokeStyle = "white";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(scaleX, scaleY, scaleWidth, scaleHeight);
+
+      // Numeric scale labels
+      ctx.fillStyle = "white";
+      ctx.font = "10px Arial";
+      ctx.textAlign = "left";
+      const minText = minValue === Infinity ? "0.00" : minValue.toFixed(2);
+      ctx.fillText(minText, scaleX, scaleY + scaleHeight + 12);
+
+      ctx.textAlign = "center";
+      ctx.fillText(
+        colorModeRef.current === "speed" ? "Speed" : "Pressure",
+        scaleX + scaleWidth / 2,
+        scaleY + scaleHeight + 12
+      );
+
+      ctx.textAlign = "right";
+      const maxText = maxValue === -Infinity ? "1.00" : maxValue.toFixed(2);
+      ctx.fillText(maxText, scaleX + scaleWidth, scaleY + scaleHeight + 12);
+
+      // Add units
+      ctx.font = "9px Arial";
+      ctx.textAlign = "center";
+      const units = colorModeRef.current === "speed" ? "units/s" : "Pa";
+      ctx.fillText(units, scaleX + scaleWidth / 2, scaleY + scaleHeight + 25);
+    }
+
+    // Draw analysis point and data
+    if (analysisPointRef.current) {
+      // Draw crosshair
+      ctx.strokeStyle = "#00ff00";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(analysisPointRef.current.x - 10, analysisPointRef.current.y);
+      ctx.lineTo(analysisPointRef.current.x + 10, analysisPointRef.current.y);
+      ctx.moveTo(analysisPointRef.current.x, analysisPointRef.current.y - 10);
+      ctx.lineTo(analysisPointRef.current.x, analysisPointRef.current.y + 10);
+      ctx.stroke();
+
+      // Draw analysis data box
+      if (analysisDataRef.current) {
+        const boxX = Math.min(analysisPointRef.current.x + 15, width - 200);
+        const boxY = Math.max(analysisPointRef.current.y - 60, 10);
+        const boxWidth = 200; // Increased width for close button
+        const boxHeight = analysisDataRef.current.type === "obstacle" ? 40 : 80;
+
+        // Background
+        ctx.fillStyle = "rgba(0, 0, 0, 0.9)";
+        ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
+        ctx.strokeStyle = "#00ff00";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
+
+        // Close button
+        const closeButtonX = boxX + boxWidth - 20;
+        const closeButtonY = boxY + 5;
+        const closeButtonSize = 12;
+
+        ctx.fillStyle = "rgba(255, 0, 0, 0.7)";
+        ctx.fillRect(
+          closeButtonX,
+          closeButtonY,
+          closeButtonSize,
+          closeButtonSize
+        );
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(
+          closeButtonX,
+          closeButtonY,
+          closeButtonSize,
+          closeButtonSize
+        );
+
+        // X symbol
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(closeButtonX + 2, closeButtonY + 2);
+        ctx.lineTo(
+          closeButtonX + closeButtonSize - 2,
+          closeButtonY + closeButtonSize - 2
+        );
+        ctx.moveTo(closeButtonX + closeButtonSize - 2, closeButtonY + 2);
+        ctx.lineTo(closeButtonX + 2, closeButtonY + closeButtonSize - 2);
+        ctx.stroke();
+
+        // Text
+        ctx.fillStyle = "white";
+        ctx.font = "11px Arial";
+        ctx.textAlign = "left";
+
+        if (analysisDataRef.current.type === "obstacle") {
+          ctx.fillText("Obstacle", boxX + 5, boxY + 15);
+          ctx.fillText(
+            `Grid: (${analysisDataRef.current.gridPosition.x}, ${analysisDataRef.current.gridPosition.y})`,
+            boxX + 5,
+            boxY + 30
+          );
+        } else {
+          ctx.fillText(
+            `Grid: (${analysisDataRef.current.gridPosition.x}, ${analysisDataRef.current.gridPosition.y})`,
+            boxX + 5,
+            boxY + 15
+          );
+          ctx.fillText(
+            `Speed: ${analysisDataRef.current.speed.toFixed(3)} units/s`,
+            boxX + 5,
+            boxY + 30
+          );
+          ctx.fillText(
+            `Pressure: ${analysisDataRef.current.pressure.toFixed(3)} Pa`,
+            boxX + 5,
+            boxY + 45
+          );
+          ctx.fillText(
+            `Velocity: (${analysisDataRef.current.velocity.x.toFixed(
+              2
+            )}, ${analysisDataRef.current.velocity.y.toFixed(2)})`,
+            boxX + 5,
+            boxY + 60
+          );
+          ctx.fillText(
+            `Angle: ${analysisDataRef.current.angle.toFixed(1)}°`,
+            boxX + 5,
+            boxY + 75
+          );
+        }
+      }
+    }
+  }, [GRID_WIDTH, GRID_HEIGHT, CELL_SIZE, visualizationMode]); // Add dependencies for quality changes
+
+  // Color mapping functions
+  const getSpeedColor = (speed, maxSpeed) => {
+    const normalized = Math.min(speed / maxSpeed, 1);
+    const hue = 240 - normalized * 180; // Blue (240) to Red (60)
+    return `hsl(${hue}, 80%, 60%)`;
+  };
+
+  const getPressureColor = (pressure, minPressure, maxPressure) => {
+    const range = Math.max(Math.abs(minPressure), Math.abs(maxPressure));
+    if (range === 0) return "hsl(120, 50%, 50%)";
+
+    const normalized = pressure / range;
+    if (normalized > 0) {
+      // High pressure - red to yellow
+      const hue = 60 - normalized * 60; // Yellow (60) to Red (0)
+      return `hsl(${Math.max(0, hue)}, 80%, 60%)`;
+    } else {
+      // Low pressure - blue to cyan
+      const hue = 240 + Math.abs(normalized) * 60; // Blue (240) to Cyan (180)
+      return `hsl(${Math.min(300, hue)}, 80%, 60%)`;
+    }
+  };
+
+  // Check if click is on close button
+  const isClickOnCloseButton = (clickX, clickY) => {
+    if (!analysisPointRef.current || !analysisDataRef.current) return false;
+
+    const canvas = canvasRef.current;
+    if (!canvas) return false;
+
+    const width = canvas.width;
+    const boxX = Math.min(analysisPointRef.current.x + 15, width - 200);
+    const boxY = Math.max(analysisPointRef.current.y - 60, 10);
+    const closeButtonX = boxX + 200 - 20; // boxWidth is 200
+    const closeButtonY = boxY + 5;
+    const closeButtonSize = 12;
+
+    return (
+      clickX >= closeButtonX &&
+      clickX <= closeButtonX + closeButtonSize &&
+      clickY >= closeButtonY &&
+      clickY <= closeButtonY + closeButtonSize
+    );
+  };
+
+  // Analysis function
+  const analyzePoint = (x, y) => {
+    const gridX = Math.floor(x / CELL_SIZE);
+    const gridY = Math.floor(y / CELL_SIZE);
+
+    if (gridX < 0 || gridX >= GRID_WIDTH || gridY < 0 || gridY >= GRID_HEIGHT) {
+      return null;
+    }
+
+    const idx = gridY * GRID_WIDTH + gridX;
+    const { velocityX, velocityY, pressure, obstacles } =
+      simulationState.current;
+
+    if (obstacles[idx]) {
+      return {
+        type: "obstacle",
+        position: { x: gridX, y: gridY },
+        gridPosition: { x: gridX, y: gridY },
+      };
+    }
+
+    const vx = velocityX[idx];
+    const vy = velocityY[idx];
+    const speed = Math.sqrt(vx * vx + vy * vy);
+    const p = pressure[idx];
+
+    return {
+      type: "fluid",
+      position: { x, y },
+      gridPosition: { x: gridX, y: gridY },
+      velocity: { x: vx, y: vy },
+      speed: speed,
+      pressure: p,
+      angle: (Math.atan2(vy, vx) * 180) / Math.PI,
+    };
+  };
+
+  // Update analysis data in real-time
+  const updateAnalysisData = () => {
+    if (analysisPointRef.current) {
+      const data = analyzePoint(
+        analysisPointRef.current.x,
+        analysisPointRef.current.y
+      );
+      if (data) {
+        analysisDataRef.current = data;
+        // Only update state if not running to avoid performance issues
+        if (!isRunning) {
+          setAnalysisData(data);
+        }
+      }
+    }
+  };
 
   // Update particles
   const updateParticles = () => {
@@ -768,6 +1157,14 @@ const CFDSimulator = () => {
       e.preventDefault();
       const coords = getCanvasCoordinates(e);
 
+      // Check if clicking on close button
+      if (isClickOnCloseButton(coords.x, coords.y)) {
+        setAnalysisPoint(null);
+        setAnalysisData(null);
+        if (!isRunning) render();
+        return;
+      }
+
       if (drawingMode === "bezier") {
         const newPoint = { x: coords.x, y: coords.y };
         setCurrentBezier((prev) => {
@@ -781,12 +1178,18 @@ const CFDSimulator = () => {
           }
           return updated;
         });
-      } else if (drawingMode !== "none") {
+      } else if (drawingMode === "draw" || drawingMode === "erase") {
         setIsDrawing(true);
         drawObstacle(coords.x, coords.y, drawingMode === "erase");
         if (!isRunning) {
           render();
         }
+      } else {
+        // Default: show analysis data at clicked point
+        const data = analyzePoint(coords.x, coords.y);
+        setAnalysisPoint(coords);
+        setAnalysisData(data);
+        if (!isRunning) render();
       }
     },
     [drawingMode, isRunning, brushSize, render]
@@ -795,7 +1198,7 @@ const CFDSimulator = () => {
   const handleMouseMove = useCallback(
     (e) => {
       e.preventDefault();
-      if (isDrawing && drawingMode !== "none" && drawingMode !== "bezier") {
+      if (isDrawing && (drawingMode === "draw" || drawingMode === "erase")) {
         const coords = getCanvasCoordinates(e);
         drawObstacle(coords.x, coords.y, drawingMode === "erase");
         if (!isRunning) {
@@ -803,7 +1206,7 @@ const CFDSimulator = () => {
         }
       }
     },
-    [isDrawing, drawingMode, isRunning, brushSize, render]
+    [isDrawing, drawingMode, drawObstacle, isRunning, render]
   );
 
   const handleMouseUp = useCallback((e) => {
@@ -831,7 +1234,15 @@ const CFDSimulator = () => {
     advectVelocity();
     applyBoundaryConditions();
     updateParticles();
-  }, []); // Remove settings dependency - functions will use current settings via closure
+    updateAnalysisData(); // Update analysis data in real-time
+  }, [
+    advectVelocity,
+    applyBoundaryConditions,
+    applyViscosity,
+    projectVelocity,
+    updateParticles,
+    updateAnalysisData,
+  ]); // Remove settings dependency - functions will use current settings via closure
 
   const runSimulationSteps = useCallback(() => {
     const steps = Math.max(1, Math.floor(playbackSpeed));
@@ -862,24 +1273,21 @@ const CFDSimulator = () => {
     initializeObstacles();
     initializeParticles();
     render();
-  }, [initializeObstacles, initializeParticles, render]); // Only run once on mount
+  }, []); // Only run once on mount
 
   // Reinitialize only when quality changes (grid size changes)
   useEffect(() => {
     setIsRunning(false);
+    // Clear analysis data when quality changes to prevent overlay issues
+    setAnalysisPoint(null);
+    setAnalysisData(null);
     setTimeout(() => {
-      reinitializeSimulation();
+      // Simulation state will auto-reinitialize due to grid size change
       initializeObstacles();
       initializeParticles();
       render();
     }, 100);
-  }, [
-    initializeObstacles,
-    initializeParticles,
-    quality,
-    reinitializeSimulation,
-    render,
-  ]); // Only depend on quality
+  }, [quality, initializeObstacles, initializeParticles, render]); // Include function dependencies
 
   // Re-render when drawing mode, visualization, or settings change (without restarting simulation)
   useEffect(() => {
@@ -887,6 +1295,13 @@ const CFDSimulator = () => {
       render();
     }
   }, [drawingMode, visualizationMode, settings, isRunning, render]);
+
+  // Separate useEffect for analysis data to avoid render function recreation
+  useEffect(() => {
+    if (!isRunning) {
+      render();
+    }
+  }, [analysisPoint, analysisData, colorMode, showScale, isRunning, render]);
 
   // Start/stop animation
   useEffect(() => {
@@ -903,6 +1318,20 @@ const CFDSimulator = () => {
       }
     };
   }, [isRunning, animate]);
+
+  // Add keyboard shortcut to close analysis popup
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape" && analysisPoint) {
+        setAnalysisPoint(null);
+        setAnalysisData(null);
+        if (!isRunning) render();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [analysisPoint, isRunning]);
 
   const handlePlayPause = () => {
     setIsRunning(!isRunning);
@@ -1017,6 +1446,7 @@ const CFDSimulator = () => {
                     <Eraser className="w-4 h-4" />
                     Erase
                   </button>
+
                   {drawingMode === "bezier" && currentBezier.length > 0 && (
                     <button
                       onClick={() => setCurrentBezier([])}
@@ -1115,6 +1545,7 @@ const CFDSimulator = () => {
               </div>
               <div className="bg-black rounded-lg overflow-hidden relative">
                 <canvas
+                  key={`canvas-${quality}`}
                   ref={canvasRef}
                   width={GRID_WIDTH * CELL_SIZE}
                   height={GRID_HEIGHT * CELL_SIZE}
@@ -1125,40 +1556,40 @@ const CFDSimulator = () => {
                       ? "max-h-[650px]"
                       : "max-h-[600px]"
                   } ${
-                    drawingMode === "draw"
+                    drawingMode === "draw" || drawingMode === "bezier"
                       ? "cursor-crosshair"
                       : drawingMode === "erase"
                       ? "cursor-pointer"
-                      : "cursor-default"
+                      : "cursor-crosshair"
                   }`}
                   onMouseDown={handleMouseDown}
                   onMouseMove={handleMouseMove}
                   onMouseUp={handleMouseUp}
                   onMouseLeave={handleMouseLeave}
                 />
-                {drawingMode !== "none" && (
-                  <div className="absolute top-2 left-2 bg-black bg-opacity-75 text-white px-2 py-1 rounded text-sm">
-                    {drawingMode === "draw" && "🖌️ Drawing obstacles"}
-                    {drawingMode === "erase" && "🧽 Erasing obstacles"}
-                    {drawingMode === "bezier" && (
-                      <div>
-                        📐 Bezier curve: Click 4 points
-                        {currentBezier.length > 0 && (
-                          <div className="text-xs">
-                            Point {currentBezier.length}/4 -{" "}
-                            {currentBezier.length === 1
-                              ? "Start point"
-                              : currentBezier.length === 2
-                              ? "Control point 1"
-                              : currentBezier.length === 3
-                              ? "Control point 2"
-                              : "End point"}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
+                <div className="absolute top-2 left-2 bg-black bg-opacity-75 text-white px-2 py-1 rounded text-sm">
+                  {drawingMode === "draw" && "🖌️ Drawing obstacles"}
+                  {drawingMode === "erase" && "🧽 Erasing obstacles"}
+                  {drawingMode === "bezier" && (
+                    <div>
+                      📐 Bezier curve: Click 4 points
+                      {currentBezier.length > 0 && (
+                        <div className="text-xs">
+                          Point {currentBezier.length}/4 -{" "}
+                          {currentBezier.length === 1
+                            ? "Start point"
+                            : currentBezier.length === 2
+                            ? "Control point 1"
+                            : currentBezier.length === 3
+                            ? "Control point 2"
+                            : "End point"}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {drawingMode === "none" &&
+                    "🔍 Click anywhere to analyze flow data"}
+                </div>
               </div>
             </div>
           </div>
@@ -1237,7 +1668,7 @@ const CFDSimulator = () => {
                   <input
                     type="range"
                     min="0.25"
-                    max="3.0"
+                    max="4.0"
                     step="0.25"
                     value={playbackSpeed}
                     onChange={(e) =>
@@ -1245,11 +1676,6 @@ const CFDSimulator = () => {
                     }
                     className="w-full"
                   />
-                  <div className="flex justify-between text-xs text-gray-500 mt-1">
-                    <span>0.25x</span>
-                    <span>1x</span>
-                    <span>3x</span>
-                  </div>
                 </div>
 
                 <div>
@@ -1305,7 +1731,7 @@ const CFDSimulator = () => {
                     onChange={(e) =>
                       setSettings((prev) => ({
                         ...prev,
-                        
+
                         particleCount: parseInt(e.target.value),
                       }))
                     }
@@ -1402,6 +1828,48 @@ const CFDSimulator = () => {
                       />
                       <span className="text-sm">Particle Traces</span>
                     </label>
+
+                    {settings.showParticles && (
+                      <>
+                        <div className="mt-3 pt-3 border-t border-gray-600">
+                          <div className="text-sm font-medium mb-2">
+                            Particle Color Mode
+                          </div>
+                          <div className="flex gap-1 bg-gray-700 rounded-lg p-1">
+                            <button
+                              onClick={() => setColorMode("speed")}
+                              className={`px-3 py-1 rounded text-xs transition-colors ${
+                                colorMode === "speed"
+                                  ? "bg-blue-600 text-white"
+                                  : "text-gray-300 hover:text-white"
+                              }`}
+                            >
+                              Speed
+                            </button>
+                            <button
+                              onClick={() => setColorMode("pressure")}
+                              className={`px-3 py-1 rounded text-xs transition-colors ${
+                                colorMode === "pressure"
+                                  ? "bg-purple-600 text-white"
+                                  : "text-gray-300 hover:text-white"
+                              }`}
+                            >
+                              Pressure
+                            </button>
+                          </div>
+                        </div>
+
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={showScale}
+                            onChange={(e) => setShowScale(e.target.checked)}
+                            className="rounded"
+                          />
+                          <span className="text-sm">Show Color Scale</span>
+                        </label>
+                      </>
+                    )}
                   </>
                 )}
 
@@ -1434,6 +1902,14 @@ const CFDSimulator = () => {
                 <p>
                   <strong>🖌️ Draw Mode:</strong> Click and drag to draw
                   obstacles
+                </p>
+                <p>
+                  <strong>📐 Bezier Mode:</strong> Click 4 points to create
+                  smooth curves
+                </p>
+                <p>
+                  <strong>🔍 Analyze Mode:</strong> Click anywhere to see flow
+                  data
                 </p>
                 <p>
                   <strong>🧽 Erase Mode:</strong> Click and drag to remove
@@ -1469,18 +1945,52 @@ const CFDSimulator = () => {
             </div>
 
             <div className="bg-gray-800 rounded-lg p-4">
-              <h3 className="text-lg font-semibold mb-3">Pressure Mode</h3>
+              <h3 className="text-lg font-semibold mb-3">Color Modes</h3>
               <div className="text-sm text-gray-400 space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-red-500 rounded"></div>
-                  <span>High Pressure (Red/Yellow)</span>
+                <div>
+                  <strong className="text-blue-400">Speed Mode:</strong>
+                  <div className="ml-2 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 bg-blue-500 rounded"></div>
+                      <span>Slow (Blue)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 bg-green-500 rounded"></div>
+                      <span>Medium (Green)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 bg-yellow-500 rounded"></div>
+                      <span>Fast (Yellow/Red)</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-blue-500 rounded"></div>
-                  <span>Low Pressure (Blue/Cyan)</span>
+                <div>
+                  <strong className="text-purple-400">Pressure Mode:</strong>
+                  <div className="ml-2 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 bg-blue-500 rounded"></div>
+                      <span>Low Pressure (Blue)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 bg-green-500 rounded"></div>
+                      <span>Neutral (Green)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 bg-red-500 rounded"></div>
+                      <span>High Pressure (Red)</span>
+                    </div>
+                  </div>
                 </div>
+              </div>
+            </div>
+
+            <div className="bg-gray-800 rounded-lg p-4">
+              <h3 className="text-lg font-semibold mb-3">
+                Pressure Visualization
+              </h3>
+              <div className="text-sm text-gray-400 space-y-2">
                 <p className="text-xs">
-                  White dots show pressure contour lines
+                  In pressure mode, white dots show pressure contour lines
                 </p>
               </div>
             </div>
