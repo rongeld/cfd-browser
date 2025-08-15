@@ -40,6 +40,7 @@ const CFDSimulator = () => {
   const [quality, setQuality] = useState("medium"); // 'low', 'medium', 'high', 'ultra'
   const [bezierPoints, setBezierPoints] = useState([]);
   const [currentBezier, setCurrentBezier] = useState([]);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1.0); // 0.5x, 1x, 1.25x, 1.5x, 2x
 
   // Grid dimensions based on quality
   const getGridDimensions = () => {
@@ -832,14 +833,29 @@ const CFDSimulator = () => {
     updateParticles();
   }, []); // Remove settings dependency - functions will use current settings via closure
 
+  const runSimulationSteps = useCallback(() => {
+    const steps = Math.max(1, Math.floor(playbackSpeed));
+    const fractionalStep = playbackSpeed - steps;
+
+    // Run full steps
+    for (let i = 0; i < steps; i++) {
+      simulationStep();
+    }
+
+    // Handle fractional step (for speeds like 1.25x, 1.5x)
+    if (fractionalStep > 0 && Math.random() < fractionalStep) {
+      simulationStep();
+    }
+  }, [simulationStep, playbackSpeed]);
+
   // Animation loop
   const animate = useCallback(() => {
     if (isRunning) {
-      simulationStep();
+      runSimulationSteps();
       render();
       animationRef.current = requestAnimationFrame(animate);
     }
-  }, [isRunning, simulationStep, render]);
+  }, [isRunning, runSimulationSteps, render]);
 
   // Initialize simulation once
   useEffect(() => {
@@ -870,7 +886,7 @@ const CFDSimulator = () => {
     if (!isRunning) {
       render();
     }
-  }, [drawingMode, visualizationMode, settings, isRunning]);
+  }, [drawingMode, visualizationMode, settings, isRunning, render]);
 
   // Start/stop animation
   useEffect(() => {
@@ -1015,6 +1031,59 @@ const CFDSimulator = () => {
                   >
                     Clear All
                   </button>
+                  <div className="flex gap-1 bg-gray-700 rounded-lg p-1">
+                    <button
+                      onClick={() => setPlaybackSpeed(0.5)}
+                      className={`px-2 py-1 rounded text-xs transition-colors ${
+                        playbackSpeed === 0.5
+                          ? "bg-blue-600 text-white"
+                          : "text-gray-300 hover:text-white"
+                      }`}
+                    >
+                      0.5x
+                    </button>
+                    <button
+                      onClick={() => setPlaybackSpeed(1.0)}
+                      className={`px-2 py-1 rounded text-xs transition-colors ${
+                        playbackSpeed === 1.0
+                          ? "bg-blue-600 text-white"
+                          : "text-gray-300 hover:text-white"
+                      }`}
+                    >
+                      1x
+                    </button>
+                    <button
+                      onClick={() => setPlaybackSpeed(1.25)}
+                      className={`px-2 py-1 rounded text-xs transition-colors ${
+                        playbackSpeed === 1.25
+                          ? "bg-blue-600 text-white"
+                          : "text-gray-300 hover:text-white"
+                      }`}
+                    >
+                      1.25x
+                    </button>
+                    <button
+                      onClick={() => setPlaybackSpeed(1.5)}
+                      className={`px-2 py-1 rounded text-xs transition-colors ${
+                        playbackSpeed === 1.5
+                          ? "bg-blue-600 text-white"
+                          : "text-gray-300 hover:text-white"
+                      }`}
+                    >
+                      1.5x
+                    </button>
+                    <button
+                      onClick={() => setPlaybackSpeed(2.0)}
+                      className={`px-2 py-1 rounded text-xs transition-colors ${
+                        playbackSpeed === 2.0
+                          ? "bg-blue-600 text-white"
+                          : "text-gray-300 hover:text-white"
+                      }`}
+                    >
+                      2x
+                    </button>
+                  </div>
+
                   <button
                     onClick={handlePlayPause}
                     className={`px-4 py-2 rounded-lg flex items-center gap-2 ${
@@ -1029,6 +1098,11 @@ const CFDSimulator = () => {
                       <Play className="w-4 h-4" />
                     )}
                     {isRunning ? "Pause" : "Play"}
+                    {playbackSpeed !== 1.0 && (
+                      <span className="text-xs opacity-75">
+                        {playbackSpeed}x
+                      </span>
+                    )}
                   </button>
                   <button
                     onClick={handleReset}
@@ -1158,6 +1232,28 @@ const CFDSimulator = () => {
 
                 <div>
                   <label className="block text-sm font-medium mb-2">
+                    Playback Speed: {playbackSpeed.toFixed(2)}x
+                  </label>
+                  <input
+                    type="range"
+                    min="0.25"
+                    max="3.0"
+                    step="0.25"
+                    value={playbackSpeed}
+                    onChange={(e) =>
+                      setPlaybackSpeed(parseFloat(e.target.value))
+                    }
+                    className="w-full"
+                  />
+                  <div className="flex justify-between text-xs text-gray-500 mt-1">
+                    <span>0.25x</span>
+                    <span>1x</span>
+                    <span>3x</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">
                     Wind Speed: {settings.windSpeed.toFixed(1)}
                   </label>
                   <input
@@ -1209,6 +1305,7 @@ const CFDSimulator = () => {
                     onChange={(e) =>
                       setSettings((prev) => ({
                         ...prev,
+                        
                         particleCount: parseInt(e.target.value),
                       }))
                     }
@@ -1349,6 +1446,24 @@ const CFDSimulator = () => {
                 <p>
                   <strong>⚙️ Parameters:</strong> Adjust settings to see
                   different flow behaviors
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-gray-800 rounded-lg p-4">
+              <h3 className="text-lg font-semibold mb-3">Playback Speed</h3>
+              <div className="text-sm text-gray-400 space-y-2">
+                <p>Control simulation speed from 0.25x to 3x:</p>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-blue-500 rounded"></div>
+                  <span>Quick buttons: 0.5x, 1x, 1.25x, 1.5x, 2x</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-green-500 rounded"></div>
+                  <span>Slider: Fine control 0.25x - 3x</span>
+                </div>
+                <p className="text-xs">
+                  Higher speeds may impact performance on slower devices
                 </p>
               </div>
             </div>
