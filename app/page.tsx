@@ -15,7 +15,7 @@ const CFDSimulator = () => {
   const canvasRef = useRef(null);
   const animationRef = useRef(null);
   const [isRunning, setIsRunning] = useState(false);
-  const [drawingMode, setDrawingMode] = useState("none"); // 'draw', 'erase', 'none'
+  const [drawingMode, setDrawingMode] = useState("none"); // 'draw', 'erase', 'bezier', 'none'
   const [isDrawing, setIsDrawing] = useState(false);
   const [brushSize, setBrushSize] = useState(10);
   const [settings, setSettings] = useState({
@@ -27,10 +27,19 @@ const CFDSimulator = () => {
     showPressureField: false,
     showParticles: true,
     obstacleSize: 50,
+    arrowSize: 1.0,
   });
+
+  // Use ref to store current settings for simulation functions
+  const settingsRef = useRef(settings);
+  useEffect(() => {
+    settingsRef.current = settings;
+  }, [settings]);
 
   const [visualizationMode, setVisualizationMode] = useState("standard"); // 'standard' or 'pressure'
   const [quality, setQuality] = useState("medium"); // 'low', 'medium', 'high', 'ultra'
+  const [bezierPoints, setBezierPoints] = useState([]);
+  const [currentBezier, setCurrentBezier] = useState([]);
 
   // Grid dimensions based on quality
   const getGridDimensions = () => {
@@ -38,12 +47,16 @@ const CFDSimulator = () => {
       low: { width: 80, height: 40, cellSize: 10 },
       medium: { width: 120, height: 60, cellSize: 8 },
       high: { width: 160, height: 80, cellSize: 6 },
-      ultra: { width: 200, height: 100, cellSize: 5 }
+      ultra: { width: 200, height: 100, cellSize: 5 },
     };
     return qualitySettings[quality];
   };
 
-  const { width: GRID_WIDTH, height: GRID_HEIGHT, cellSize: CELL_SIZE } = getGridDimensions();
+  const {
+    width: GRID_WIDTH,
+    height: GRID_HEIGHT,
+    cellSize: CELL_SIZE,
+  } = getGridDimensions();
 
   // Simulation state
   const simulationState = useRef({
@@ -73,7 +86,7 @@ const CFDSimulator = () => {
   // Initialize particles
   const initializeParticles = useCallback(() => {
     const particles = [];
-    for (let i = 0; i < settings.particleCount; i++) {
+    for (let i = 0; i < settingsRef.current.particleCount; i++) {
       particles.push({
         x: Math.random() * GRID_WIDTH * CELL_SIZE,
         y: Math.random() * GRID_HEIGHT * CELL_SIZE,
@@ -83,7 +96,7 @@ const CFDSimulator = () => {
       });
     }
     simulationState.current.particles = particles;
-  }, [settings.particleCount]);
+  }, []); // Remove dependency - will be called manually when needed
 
   // Initialize obstacles (start with no obstacles)
   const initializeObstacles = useCallback(() => {
@@ -91,10 +104,10 @@ const CFDSimulator = () => {
     obstacles.fill(false);
 
     // Optional: Add default circular obstacle
-    if (settings.obstacleSize > 0) {
+    if (settingsRef.current.obstacleSize > 0) {
       const centerX = Math.floor(GRID_WIDTH * 0.3);
       const centerY = Math.floor(GRID_HEIGHT * 0.5);
-      const radius = settings.obstacleSize / CELL_SIZE;
+      const radius = settingsRef.current.obstacleSize / CELL_SIZE;
 
       for (let i = 0; i < GRID_WIDTH; i++) {
         for (let j = 0; j < GRID_HEIGHT; j++) {
@@ -106,7 +119,7 @@ const CFDSimulator = () => {
         }
       }
     }
-  }, [settings.obstacleSize]);
+  }, []); // Remove dependency - will be called manually when needed
 
   // Get grid index from coordinates
   const getIndex = (x, y) => {
@@ -149,17 +162,23 @@ const CFDSimulator = () => {
 
         // Left boundary - inlet
         if (i === 0) {
-          velocityX[idx] = settings.windSpeed;
+          velocityX[idx] = settingsRef.current.windSpeed;
           velocityY[idx] = 0;
         }
 
-        // Top and bottom boundaries
+        // Right boundary - outlet (free flow)
+        if (i === GRID_WIDTH - 1) {
+          velocityX[idx] = velocityX[idx - 1];
+          velocityY[idx] = velocityY[idx - 1];
+        }
+
+        // Top and bottom boundaries - no slip
         if (j === 0 || j === GRID_HEIGHT - 1) {
           velocityX[idx] = 0;
           velocityY[idx] = 0;
         }
 
-        // Obstacles
+        // Obstacles - no slip
         if (obstacles[idx]) {
           velocityX[idx] = 0;
           velocityY[idx] = 0;
@@ -250,7 +269,7 @@ const CFDSimulator = () => {
   // Add viscosity
   const applyViscosity = () => {
     const { velocityX, velocityY, obstacles } = simulationState.current;
-    const alpha = settings.viscosity;
+    const alpha = settingsRef.current.viscosity;
 
     for (let field of [velocityX, velocityY]) {
       const newField = [...field];
@@ -381,7 +400,7 @@ const CFDSimulator = () => {
       }
 
       // Minimal velocity vectors for pressure mode
-      if (settings.showVelocityField) {
+      if (settingsRef.current.showVelocityField) {
         for (let i = 0; i < GRID_WIDTH; i += 4) {
           for (let j = 0; j < GRID_HEIGHT; j += 4) {
             const idx = j * GRID_WIDTH + i;
@@ -393,7 +412,10 @@ const CFDSimulator = () => {
               if (speed > 0.2) {
                 const x = i * CELL_SIZE;
                 const y = j * CELL_SIZE;
-                const length = Math.min(speed * 3, CELL_SIZE * 0.8);
+                const length = Math.min(
+                  speed * 3 * settingsRef.current.arrowSize,
+                  CELL_SIZE * 0.8
+                );
 
                 ctx.strokeStyle = `rgba(255, 255, 255, 0.6)`;
                 ctx.lineWidth = 1;
@@ -404,7 +426,7 @@ const CFDSimulator = () => {
 
                 // Arrow head
                 const angle = Math.atan2(vy, vx);
-                const headLength = 3;
+                const headLength = 3 * settingsRef.current.arrowSize;
                 ctx.beginPath();
                 ctx.moveTo(x + vx * length, y + vy * length);
                 ctx.lineTo(
@@ -426,7 +448,7 @@ const CFDSimulator = () => {
       // Standard visualization mode
 
       // Draw velocity field
-      if (settings.showVelocityField) {
+      if (settingsRef.current.showVelocityField) {
         for (let i = 0; i < GRID_WIDTH; i += 2) {
           for (let j = 0; j < GRID_HEIGHT; j += 2) {
             const idx = j * GRID_WIDTH + i;
@@ -438,7 +460,10 @@ const CFDSimulator = () => {
               if (speed > 0.1) {
                 const x = i * CELL_SIZE;
                 const y = j * CELL_SIZE;
-                const length = Math.min(speed * 5, CELL_SIZE);
+                const length = Math.min(
+                  speed * 5 * settingsRef.current.arrowSize,
+                  CELL_SIZE
+                );
 
                 ctx.strokeStyle = `hsl(${200 + speed * 20}, 70%, 50%)`;
                 ctx.lineWidth = 1;
@@ -446,6 +471,28 @@ const CFDSimulator = () => {
                 ctx.moveTo(x, y);
                 ctx.lineTo(x + vx * length, y + vy * length);
                 ctx.stroke();
+
+                // Arrow head for standard mode
+                if (length > 5) {
+                  const angle = Math.atan2(vy, vx);
+                  const headLength = 2 * settingsRef.current.arrowSize;
+                  ctx.beginPath();
+                  ctx.moveTo(x + vx * length, y + vy * length);
+                  ctx.lineTo(
+                    x +
+                      vx * length -
+                      headLength * Math.cos(angle - Math.PI / 6),
+                    y + vy * length - headLength * Math.sin(angle - Math.PI / 6)
+                  );
+                  ctx.moveTo(x + vx * length, y + vy * length);
+                  ctx.lineTo(
+                    x +
+                      vx * length -
+                      headLength * Math.cos(angle + Math.PI / 6),
+                    y + vy * length - headLength * Math.sin(angle + Math.PI / 6)
+                  );
+                  ctx.stroke();
+                }
               }
             }
           }
@@ -453,7 +500,7 @@ const CFDSimulator = () => {
       }
 
       // Draw pressure field
-      if (settings.showPressureField) {
+      if (settingsRef.current.showPressureField) {
         for (let i = 0; i < GRID_WIDTH; i++) {
           for (let j = 0; j < GRID_HEIGHT; j++) {
             const idx = j * GRID_WIDTH + i;
@@ -473,7 +520,7 @@ const CFDSimulator = () => {
       }
 
       // Draw particles
-      if (settings.showParticles) {
+      if (settingsRef.current.showParticles) {
         particles.forEach((particle) => {
           const speed = Math.sqrt(
             particle.vx * particle.vx + particle.vy * particle.vy
@@ -504,12 +551,59 @@ const CFDSimulator = () => {
         }
       }
     }
-  }, [settings, visualizationMode, drawingMode]);
+
+    // Draw bezier curve preview
+    if (drawingMode === "bezier" && currentBezier.length > 0) {
+      ctx.strokeStyle = "#00ff00";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 5]);
+
+      // Draw control points
+      currentBezier.forEach((point, index) => {
+        ctx.fillStyle = index === 0 || index === 3 ? "#00ff00" : "#ffff00";
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // Draw preview curve if we have enough points
+      if (currentBezier.length >= 2) {
+        ctx.beginPath();
+        ctx.moveTo(currentBezier[0].x, currentBezier[0].y);
+        for (let i = 1; i < currentBezier.length; i++) {
+          ctx.lineTo(currentBezier[i].x, currentBezier[i].y);
+        }
+        ctx.stroke();
+      }
+
+      ctx.setLineDash([]);
+    }
+  }, []); // Remove dependencies - render function will use current state via closure
 
   // Update particles
   const updateParticles = () => {
     const particles = simulationState.current.particles;
     const dt = 0.016;
+
+    // Adjust particle count dynamically
+    const targetCount = settingsRef.current.particleCount;
+    const currentCount = particles.length;
+
+    if (currentCount < targetCount) {
+      // Add particles
+      for (let i = currentCount; i < targetCount; i++) {
+        particles.push({
+          x: Math.random() * GRID_WIDTH * CELL_SIZE,
+          y: Math.random() * GRID_HEIGHT * CELL_SIZE,
+          vx: 0,
+          vy: 0,
+          life: 1.0,
+        });
+      }
+    } else if (currentCount > targetCount) {
+      // Remove particles
+      particles.splice(targetCount);
+    }
 
     particles.forEach((particle) => {
       // Get velocity at particle position
@@ -610,12 +704,84 @@ const CFDSimulator = () => {
     }
   };
 
+  // Bezier curve functions
+  const drawBezierCurve = (points, thickness = 3) => {
+    if (points.length < 4) return;
+
+    const obstacles = simulationState.current.obstacles;
+
+    // Draw bezier curve using De Casteljau's algorithm
+    for (let t = 0; t <= 1; t += 0.01) {
+      const point = getBezierPoint(points, t);
+      const gridX = Math.floor(point.x / CELL_SIZE);
+      const gridY = Math.floor(point.y / CELL_SIZE);
+
+      // Draw thick line
+      const radius = Math.floor(thickness / 2);
+      for (
+        let i = Math.max(0, gridX - radius);
+        i <= Math.min(GRID_WIDTH - 1, gridX + radius);
+        i++
+      ) {
+        for (
+          let j = Math.max(0, gridY - radius);
+          j <= Math.min(GRID_HEIGHT - 1, gridY + radius);
+          j++
+        ) {
+          const dx = i - gridX;
+          const dy = j - gridY;
+          if (dx * dx + dy * dy <= radius * radius) {
+            const idx = j * GRID_WIDTH + i;
+            obstacles[idx] = true;
+            simulationState.current.velocityX[idx] = 0;
+            simulationState.current.velocityY[idx] = 0;
+          }
+        }
+      }
+    }
+  };
+
+  const getBezierPoint = (points, t) => {
+    if (points.length === 4) {
+      // Cubic bezier
+      const [p0, p1, p2, p3] = points;
+      const u = 1 - t;
+      return {
+        x:
+          u * u * u * p0.x +
+          3 * u * u * t * p1.x +
+          3 * u * t * t * p2.x +
+          t * t * t * p3.x,
+        y:
+          u * u * u * p0.y +
+          3 * u * u * t * p1.y +
+          3 * u * t * t * p2.y +
+          t * t * t * p3.y,
+      };
+    }
+    return points[0] || { x: 0, y: 0 };
+  };
+
   const handleMouseDown = useCallback(
     (e) => {
       e.preventDefault();
-      if (drawingMode !== "none") {
+      const coords = getCanvasCoordinates(e);
+
+      if (drawingMode === "bezier") {
+        const newPoint = { x: coords.x, y: coords.y };
+        setCurrentBezier((prev) => {
+          const updated = [...prev, newPoint];
+          if (updated.length === 4) {
+            // Complete the bezier curve
+            drawBezierCurve(updated, brushSize / 2);
+            setBezierPoints((prevBezier) => [...prevBezier, updated]);
+            if (!isRunning) render();
+            return [];
+          }
+          return updated;
+        });
+      } else if (drawingMode !== "none") {
         setIsDrawing(true);
-        const coords = getCanvasCoordinates(e);
         drawObstacle(coords.x, coords.y, drawingMode === "erase");
         if (!isRunning) {
           render();
@@ -628,7 +794,7 @@ const CFDSimulator = () => {
   const handleMouseMove = useCallback(
     (e) => {
       e.preventDefault();
-      if (isDrawing && drawingMode !== "none") {
+      if (isDrawing && drawingMode !== "none" && drawingMode !== "bezier") {
         const coords = getCanvasCoordinates(e);
         drawObstacle(coords.x, coords.y, drawingMode === "erase");
         if (!isRunning) {
@@ -651,6 +817,8 @@ const CFDSimulator = () => {
 
   const clearObstacles = () => {
     simulationState.current.obstacles.fill(false);
+    setBezierPoints([]);
+    setCurrentBezier([]);
     if (!isRunning) {
       render();
     }
@@ -662,7 +830,7 @@ const CFDSimulator = () => {
     advectVelocity();
     applyBoundaryConditions();
     updateParticles();
-  }, [settings]);
+  }, []); // Remove settings dependency - functions will use current settings via closure
 
   // Animation loop
   const animate = useCallback(() => {
@@ -673,14 +841,14 @@ const CFDSimulator = () => {
     }
   }, [isRunning, simulationStep, render]);
 
-  // Initialize simulation
+  // Initialize simulation once
   useEffect(() => {
     initializeObstacles();
     initializeParticles();
     render();
-  }, [initializeObstacles, initializeParticles, render]);
+  }, [initializeObstacles, initializeParticles, render]); // Only run once on mount
 
-  // Reinitialize when quality changes
+  // Reinitialize only when quality changes (grid size changes)
   useEffect(() => {
     setIsRunning(false);
     setTimeout(() => {
@@ -689,14 +857,20 @@ const CFDSimulator = () => {
       initializeParticles();
       render();
     }, 100);
-  }, [quality, reinitializeSimulation, initializeObstacles, initializeParticles, render]);
+  }, [
+    initializeObstacles,
+    initializeParticles,
+    quality,
+    reinitializeSimulation,
+    render,
+  ]); // Only depend on quality
 
-  // Re-render when drawing mode changes
+  // Re-render when drawing mode, visualization, or settings change (without restarting simulation)
   useEffect(() => {
     if (!isRunning) {
       render();
     }
-  }, [drawingMode, render, isRunning]);
+  }, [drawingMode, visualizationMode, settings, isRunning]);
 
   // Start/stop animation
   useEffect(() => {
@@ -794,6 +968,28 @@ const CFDSimulator = () => {
                   </button>
                   <button
                     onClick={() =>
+                      setDrawingMode(
+                        drawingMode === "bezier" ? "none" : "bezier"
+                      )
+                    }
+                    className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-colors ${
+                      drawingMode === "bezier"
+                        ? "bg-green-600 hover:bg-green-700"
+                        : "bg-gray-600 hover:bg-gray-700"
+                    }`}
+                  >
+                    <svg
+                      className="w-4 h-4"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                    >
+                      <path d="M3 12c0 0 3-6 9-6s9 6 9 6-3 6-9 6-9-6-9-6z" />
+                    </svg>
+                    Bezier
+                  </button>
+                  <button
+                    onClick={() =>
                       setDrawingMode(drawingMode === "erase" ? "none" : "erase")
                     }
                     className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-colors ${
@@ -805,6 +1001,14 @@ const CFDSimulator = () => {
                     <Eraser className="w-4 h-4" />
                     Erase
                   </button>
+                  {drawingMode === "bezier" && currentBezier.length > 0 && (
+                    <button
+                      onClick={() => setCurrentBezier([])}
+                      className="px-3 py-2 bg-yellow-600 hover:bg-yellow-700 rounded-lg transition-colors text-sm"
+                    >
+                      Cancel Curve
+                    </button>
+                  )}
                   <button
                     onClick={clearObstacles}
                     className="px-3 py-2 bg-orange-600 hover:bg-orange-700 rounded-lg transition-colors text-sm"
@@ -841,8 +1045,11 @@ const CFDSimulator = () => {
                   width={GRID_WIDTH * CELL_SIZE}
                   height={GRID_HEIGHT * CELL_SIZE}
                   className={`w-full h-auto ${
-                    quality === 'ultra' ? 'max-h-[700px]' : 
-                    quality === 'high' ? 'max-h-[650px]' : 'max-h-[600px]'
+                    quality === "ultra"
+                      ? "max-h-[700px]"
+                      : quality === "high"
+                      ? "max-h-[650px]"
+                      : "max-h-[600px]"
                   } ${
                     drawingMode === "draw"
                       ? "cursor-crosshair"
@@ -857,9 +1064,25 @@ const CFDSimulator = () => {
                 />
                 {drawingMode !== "none" && (
                   <div className="absolute top-2 left-2 bg-black bg-opacity-75 text-white px-2 py-1 rounded text-sm">
-                    {drawingMode === "draw"
-                      ? "🖌️ Drawing obstacles"
-                      : "🧽 Erasing obstacles"}
+                    {drawingMode === "draw" && "🖌️ Drawing obstacles"}
+                    {drawingMode === "erase" && "🧽 Erasing obstacles"}
+                    {drawingMode === "bezier" && (
+                      <div>
+                        📐 Bezier curve: Click 4 points
+                        {currentBezier.length > 0 && (
+                          <div className="text-xs">
+                            Point {currentBezier.length}/4 -{" "}
+                            {currentBezier.length === 1
+                              ? "Start point"
+                              : currentBezier.length === 2
+                              ? "Control point 1"
+                              : currentBezier.length === 3
+                              ? "Control point 2"
+                              : "End point"}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -890,13 +1113,17 @@ const CFDSimulator = () => {
                     <option value="ultra">Ultra (200×100) - Maximum</option>
                   </select>
                   <p className="text-xs text-gray-500 mt-1">
-                    Higher quality = more accurate simulation but slower performance
+                    Higher quality = more accurate simulation but slower
+                    performance
                   </p>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium mb-2">
-                    Brush Size: {brushSize}px
+                    {drawingMode === "bezier"
+                      ? "Curve Thickness"
+                      : "Brush Size"}
+                    : {brushSize}px
                   </label>
                   <input
                     type="range"
@@ -911,12 +1138,32 @@ const CFDSimulator = () => {
 
                 <div>
                   <label className="block text-sm font-medium mb-2">
+                    Arrow Size: {settings.arrowSize.toFixed(1)}x
+                  </label>
+                  <input
+                    type="range"
+                    min="0.5"
+                    max="3.0"
+                    step="0.1"
+                    value={settings.arrowSize}
+                    onChange={(e) =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        arrowSize: parseFloat(e.target.value),
+                      }))
+                    }
+                    className="w-full"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">
                     Wind Speed: {settings.windSpeed.toFixed(1)}
                   </label>
                   <input
                     type="range"
                     min="0"
-                    max="50"
+                    max="15"
                     step="0.5"
                     value={settings.windSpeed}
                     onChange={(e) =>
@@ -956,7 +1203,7 @@ const CFDSimulator = () => {
                   <input
                     type="range"
                     min="100"
-                    max="2000"
+                    max="20000"
                     step="100"
                     value={settings.particleCount}
                     onChange={(e) =>
@@ -1123,12 +1370,15 @@ const CFDSimulator = () => {
               </div>
             </div>
 
-            {quality === 'ultra' && (
+            {quality === "ultra" && (
               <div className="bg-yellow-900 border border-yellow-600 rounded-lg p-4">
-                <h3 className="text-lg font-semibold mb-2 text-yellow-300">⚠️ Performance Notice</h3>
+                <h3 className="text-lg font-semibold mb-2 text-yellow-300">
+                  ⚠️ Performance Notice
+                </h3>
                 <p className="text-sm text-yellow-200">
-                  Ultra quality uses a 200×100 grid which may impact performance on slower devices. 
-                  Consider using High quality for the best balance of detail and performance.
+                  Ultra quality uses a 200×100 grid which may impact performance
+                  on slower devices. Consider using High quality for the best
+                  balance of detail and performance.
                 </p>
               </div>
             )}
