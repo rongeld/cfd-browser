@@ -1362,10 +1362,10 @@ const CFDSimulator = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Main Canvas */}
-          <div className="lg:col-span-3">
+          <div className="lg:col-span-3 space-y-6">
             <div className="bg-gray-800 rounded-lg p-4">
-              <div className="flex items-center justify-between mb-4">
-                <div>
+              <div className="mb-4">
+                <div className="mb-4">
                   <h2 className="text-xl font-semibold flex items-center gap-2">
                     <Wind className="w-5 h-5" />
                     Flow Visualization
@@ -1592,178 +1592,6 @@ const CFDSimulator = () => {
                 </div>
               </div>
             </div>
-          </div>
-
-          {/* Controls */}
-          <div className="space-y-4">
-            <div className="bg-gray-800 rounded-lg p-4">
-              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <Settings className="w-5 h-5" />
-                Simulation Parameters
-              </h3>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Simulation Quality
-                  </label>
-                  <select
-                    value={quality}
-                    onChange={(e) => setQuality(e.target.value)}
-                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white"
-                  >
-                    <option value="low">Low (80×40) - Fast</option>
-                    <option value="medium">Medium (120×60) - Balanced</option>
-                    <option value="high">High (160×80) - Detailed</option>
-                    <option value="ultra">Ultra (200×100) - Maximum</option>
-                  </select>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Higher quality = more accurate simulation but slower
-                    performance
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    {drawingMode === "bezier"
-                      ? "Curve Thickness"
-                      : "Brush Size"}
-                    : {brushSize}px
-                  </label>
-                  <input
-                    type="range"
-                    min="5"
-                    max="50"
-                    step="5"
-                    value={brushSize}
-                    onChange={(e) => setBrushSize(parseInt(e.target.value))}
-                    className="w-full"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Arrow Size: {settings.arrowSize.toFixed(1)}x
-                  </label>
-                  <input
-                    type="range"
-                    min="0.5"
-                    max="3.0"
-                    step="0.1"
-                    value={settings.arrowSize}
-                    onChange={(e) =>
-                      setSettings((prev) => ({
-                        ...prev,
-                        arrowSize: parseFloat(e.target.value),
-                      }))
-                    }
-                    className="w-full"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Playback Speed: {playbackSpeed.toFixed(2)}x
-                  </label>
-                  <input
-                    type="range"
-                    min="0.25"
-                    max="4.0"
-                    step="0.25"
-                    value={playbackSpeed}
-                    onChange={(e) =>
-                      setPlaybackSpeed(parseFloat(e.target.value))
-                    }
-                    className="w-full"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Wind Speed: {settings.windSpeed.toFixed(1)}
-                  </label>
-                  <input
-                    type="range"
-                    min="0"
-                    max="15"
-                    step="0.5"
-                    value={settings.windSpeed}
-                    onChange={(e) =>
-                      setSettings((prev) => ({
-                        ...prev,
-                        windSpeed: parseFloat(e.target.value),
-                      }))
-                    }
-                    className="w-full"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Viscosity: {settings.viscosity.toFixed(3)}
-                  </label>
-                  <input
-                    type="range"
-                    min="0"
-                    max="0.1"
-                    step="0.005"
-                    value={settings.viscosity}
-                    onChange={(e) =>
-                      setSettings((prev) => ({
-                        ...prev,
-                        viscosity: parseFloat(e.target.value),
-                      }))
-                    }
-                    className="w-full"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Particle Count: {settings.particleCount}
-                  </label>
-                  <input
-                    type="range"
-                    min="100"
-                    max="30000"
-                    step="100"
-                    value={settings.particleCount}
-                    onChange={(e) =>
-                      setSettings((prev) => ({
-                        ...prev,
-
-                        particleCount: parseInt(e.target.value),
-                      }))
-                    }
-                    className="w-full"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Default Obstacle Size: {settings.obstacleSize}
-                  </label>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    step="10"
-                    value={settings.obstacleSize}
-                    onChange={(e) =>
-                      setSettings((prev) => ({
-                        ...prev,
-                        obstacleSize: parseInt(e.target.value),
-                      }))
-                    }
-                    className="w-full"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Set to 0 to start with no default obstacle
-                  </p>
-                </div>
-              </div>
-            </div>
-
             <div className="bg-gray-800 rounded-lg p-4">
               <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
                 <Droplets className="w-5 h-5" />
@@ -2017,6 +1845,179 @@ const CFDSimulator = () => {
                 vortex formation, and pressure distribution.
               </p>
             </div>
+          </div>
+
+          {/* Controls */}
+          <div className="space-y-4">
+            <div className="bg-gray-800 rounded-lg p-4">
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <Settings className="w-5 h-5" />
+                Simulation Parameters
+              </h3>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Simulation Quality
+                  </label>
+                  <select
+                    value={quality}
+                    onChange={(e) => setQuality(e.target.value)}
+                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white"
+                  >
+                    <option value="low">Low (80×40) - Fast</option>
+                    <option value="medium">Medium (120×60) - Balanced</option>
+                    <option value="high">High (160×80) - Detailed</option>
+                    <option value="ultra">Ultra (200×100) - Maximum</option>
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Higher quality = more accurate simulation but slower
+                    performance
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    {drawingMode === "bezier"
+                      ? "Curve Thickness"
+                      : "Brush Size"}
+                    : {brushSize}px
+                  </label>
+                  <input
+                    type="range"
+                    min="5"
+                    max="50"
+                    step="5"
+                    value={brushSize}
+                    onChange={(e) => setBrushSize(parseInt(e.target.value))}
+                    className="w-full"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Arrow Size: {settings.arrowSize.toFixed(1)}x
+                  </label>
+                  <input
+                    type="range"
+                    min="0.5"
+                    max="3.0"
+                    step="0.1"
+                    value={settings.arrowSize}
+                    onChange={(e) =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        arrowSize: parseFloat(e.target.value),
+                      }))
+                    }
+                    className="w-full"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Playback Speed: {playbackSpeed.toFixed(2)}x
+                  </label>
+                  <input
+                    type="range"
+                    min="0.25"
+                    max="4.0"
+                    step="0.25"
+                    value={playbackSpeed}
+                    onChange={(e) =>
+                      setPlaybackSpeed(parseFloat(e.target.value))
+                    }
+                    className="w-full"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Wind Speed: {settings.windSpeed.toFixed(1)}
+                  </label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="15"
+                    step="0.5"
+                    value={settings.windSpeed}
+                    onChange={(e) =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        windSpeed: parseFloat(e.target.value),
+                      }))
+                    }
+                    className="w-full"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Viscosity: {settings.viscosity.toFixed(3)}
+                  </label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="0.1"
+                    step="0.005"
+                    value={settings.viscosity}
+                    onChange={(e) =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        viscosity: parseFloat(e.target.value),
+                      }))
+                    }
+                    className="w-full"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Particle Count: {settings.particleCount}
+                  </label>
+                  <input
+                    type="range"
+                    min="100"
+                    max="30000"
+                    step="100"
+                    value={settings.particleCount}
+                    onChange={(e) =>
+                      setSettings((prev) => ({
+                        ...prev,
+
+                        particleCount: parseInt(e.target.value),
+                      }))
+                    }
+                    className="w-full"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Default Obstacle Size: {settings.obstacleSize}
+                  </label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="10"
+                    value={settings.obstacleSize}
+                    onChange={(e) =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        obstacleSize: parseInt(e.target.value),
+                      }))
+                    }
+                    className="w-full"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Set to 0 to start with no default obstacle
+                  </p>
+                </div>
+              </div>
+            </div>
+
+           
           </div>
         </div>
       </div>
