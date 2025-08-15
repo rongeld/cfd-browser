@@ -18,8 +18,8 @@ import {
 } from "lucide-react";
 
 const CFDSimulator = () => {
-  const canvasRef = useRef(null);
-  const animationRef = useRef(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const animationRef = useRef<number | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [drawingMode, setDrawingMode] = useState("none"); // 'draw', 'erase', 'bezier', 'none'
   const [isDrawing, setIsDrawing] = useState(false);
@@ -28,7 +28,7 @@ const CFDSimulator = () => {
     viscosity: 0.02,
     density: 1.0,
     windSpeed: 5.0,
-    particleCount: 1000,
+    particleCount: 5000,
     showVelocityField: true,
     showPressureField: false,
     showParticles: true,
@@ -44,21 +44,21 @@ const CFDSimulator = () => {
 
   const [visualizationMode, setVisualizationMode] = useState("standard"); // 'standard' or 'pressure'
   const [quality, setQuality] = useState("medium"); // 'low', 'medium', 'high', 'ultra'
-  const [bezierPoints, setBezierPoints] = useState([]);
-  const [currentBezier, setCurrentBezier] = useState([]);
+  const [bezierPoints, setBezierPoints] = useState<{x: number, y: number}[][]>([]);
+  const [currentBezier, setCurrentBezier] = useState<{x: number, y: number}[]>([]);
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0); // 0.5x, 1x, 1.25x, 1.5x, 2x
   const [colorMode, setColorMode] = useState("speed"); // 'speed' or 'pressure'
   const [showScale, setShowScale] = useState(true);
-  const [analysisPoint, setAnalysisPoint] = useState(null);
-  const [analysisData, setAnalysisData] = useState(null);
+  const [analysisPoint, setAnalysisPoint] = useState<{x: number, y: number} | null>(null);
+  const [analysisData, setAnalysisData] = useState<any>(null);
 
   // Use refs to access current analysis data in render function
-  const analysisPointRef = useRef(null);
-  const analysisDataRef = useRef(null);
+  const analysisPointRef = useRef<{x: number, y: number} | null>(null);
+  const analysisDataRef = useRef<any>(null);
   const colorModeRef = useRef(colorMode);
   const showScaleRef = useRef(showScale);
   const drawingModeRef = useRef(drawingMode);
-  const currentBezierRef = useRef(currentBezier);
+  const currentBezierRef = useRef<{x: number, y: number}[]>(currentBezier);
 
   // Update refs when state changes
   useEffect(() => {
@@ -79,7 +79,7 @@ const CFDSimulator = () => {
 
   // Grid dimensions based on quality - use useMemo to recalculate when quality changes
   const { GRID_WIDTH, GRID_HEIGHT, CELL_SIZE } = useMemo(() => {
-    const qualitySettings = {
+    const qualitySettings: Record<string, {width: number, height: number, cellSize: number}> = {
       low: { width: 80, height: 40, cellSize: 10 },
       medium: { width: 120, height: 60, cellSize: 8 },
       high: { width: 160, height: 80, cellSize: 6 },
@@ -94,7 +94,16 @@ const CFDSimulator = () => {
   }, [quality]);
 
   // Simulation state - initialize with current grid dimensions
-  const simulationState = useRef(null);
+  interface SimulationState {
+    velocityX: number[];
+    velocityY: number[];
+    pressure: number[];
+    obstacles: boolean[];
+    particles: {x: number, y: number, vx: number, vy: number, life: number}[];
+    currentGridWidth: number;
+    currentGridHeight: number;
+  }
+  const simulationState = useRef<SimulationState | null>(null);
 
   // Initialize simulation state if not already done or if grid size changed
   if (
@@ -126,12 +135,12 @@ const CFDSimulator = () => {
         life: 1.0,
       });
     }
-    simulationState.current.particles = particles;
+    simulationState.current!.particles = particles;
   }, [CELL_SIZE, GRID_HEIGHT, GRID_WIDTH]); // Remove dependency - will be called manually when needed
 
   // Initialize obstacles (start with no obstacles) - only called on first load or quality change
   const initializeObstacles = useCallback(() => {
-    const obstacles = simulationState.current.obstacles;
+    const obstacles = simulationState.current!.obstacles;
     obstacles.fill(false);
 
     // Optional: Add default circular obstacle only on initial load
@@ -153,14 +162,14 @@ const CFDSimulator = () => {
   }, [CELL_SIZE, GRID_HEIGHT, GRID_WIDTH]);
 
   // Get grid index from coordinates
-  const getIndex = (x, y) => {
+  const getIndex = (x: number, y: number) => {
     const i = Math.max(0, Math.min(GRID_WIDTH - 1, Math.floor(x)));
     const j = Math.max(0, Math.min(GRID_HEIGHT - 1, Math.floor(y)));
     return j * GRID_WIDTH + i;
   };
 
   // Bilinear interpolation for velocity
-  const interpolateVelocity = (x, y, field) => {
+  const interpolateVelocity = (x: number, y: number, field: number[]) => {
     const x0 = Math.floor(x);
     const y0 = Math.floor(y);
     const x1 = Math.min(x0 + 1, GRID_WIDTH - 1);
@@ -184,7 +193,7 @@ const CFDSimulator = () => {
 
   // Apply boundary conditions
   const applyBoundaryConditions = () => {
-    const { velocityX, velocityY, obstacles } = simulationState.current;
+    const { velocityX, velocityY, obstacles } = simulationState.current!;
 
     // Set boundary velocities
     for (let i = 0; i < GRID_WIDTH; i++) {
@@ -221,7 +230,7 @@ const CFDSimulator = () => {
   // Pressure projection step
   const projectVelocity = () => {
     const { velocityX, velocityY, pressure, obstacles } =
-      simulationState.current;
+      simulationState.current!;
     const divergence = new Array(GRID_WIDTH * GRID_HEIGHT).fill(0);
 
     // Compute divergence
@@ -273,7 +282,7 @@ const CFDSimulator = () => {
 
   // Advection step
   const advectVelocity = () => {
-    const { velocityX, velocityY } = simulationState.current;
+    const { velocityX, velocityY } = simulationState.current!;
     const newVelX = [...velocityX];
     const newVelY = [...velocityY];
     const dt = 0.016; // ~60fps
@@ -293,13 +302,13 @@ const CFDSimulator = () => {
       }
     }
 
-    simulationState.current.velocityX = newVelX;
-    simulationState.current.velocityY = newVelY;
+    simulationState.current!.velocityX = newVelX;
+    simulationState.current!.velocityY = newVelY;
   };
 
   // Add viscosity
   const applyViscosity = () => {
-    const { velocityX, velocityY, obstacles } = simulationState.current;
+    const { velocityX, velocityY, obstacles } = simulationState.current!;
     const alpha = settingsRef.current.viscosity;
 
     for (const field of [velocityX, velocityY]) {
@@ -327,6 +336,7 @@ const CFDSimulator = () => {
     if (!canvas) return;
 
     const ctx = canvas.getContext("2d");
+    if (!ctx) return;
     const width = canvas.width;
     const height = canvas.height;
 
@@ -342,7 +352,7 @@ const CFDSimulator = () => {
       particles,
       currentGridWidth,
       currentGridHeight,
-    } = simulationState.current;
+    } = simulationState.current!;
 
     // Use current grid dimensions from simulation state
     const CURRENT_GRID_WIDTH = currentGridWidth;
@@ -456,8 +466,8 @@ const CFDSimulator = () => {
                 const x = i * CELL_SIZE;
                 const y = j * CELL_SIZE;
                 const length = Math.min(
-                  speed * 3 * settingsRef.current.arrowSize,
-                  CELL_SIZE * 0.8
+                  speed * 1.5 * settingsRef.current.arrowSize,
+                  CELL_SIZE * 0.4
                 );
 
                 ctx.strokeStyle = `rgba(255, 255, 255, 0.6)`;
@@ -504,8 +514,8 @@ const CFDSimulator = () => {
                 const x = i * CELL_SIZE;
                 const y = j * CELL_SIZE;
                 const length = Math.min(
-                  speed * 5 * settingsRef.current.arrowSize,
-                  CELL_SIZE
+                  speed * 2 * settingsRef.current.arrowSize,
+                  CELL_SIZE * 0.5
                 );
 
                 ctx.strokeStyle = `hsl(${200 + speed * 20}, 70%, 50%)`;
@@ -569,7 +579,7 @@ const CFDSimulator = () => {
         let minPressure = Infinity;
         let maxPressure = -Infinity;
 
-        particles.forEach((particle) => {
+        particles.forEach((particle: any) => {
           const speed = Math.sqrt(
             particle.vx * particle.vx + particle.vy * particle.vy
           );
@@ -592,7 +602,7 @@ const CFDSimulator = () => {
           }
         });
 
-        particles.forEach((particle) => {
+        particles.forEach((particle: any) => {
           const alpha = particle.life * 0.8;
           let color;
 
@@ -655,7 +665,7 @@ const CFDSimulator = () => {
       ctx.setLineDash([5, 5]);
 
       // Draw control points
-      currentBezierRef.current.forEach((point, index) => {
+      currentBezierRef.current.forEach((point: any, index: number) => {
         ctx.fillStyle = index === 0 || index === 3 ? "#00ff00" : "#ffff00";
         ctx.beginPath();
         ctx.arc(point.x, point.y, 4, 0, Math.PI * 2);
@@ -693,7 +703,7 @@ const CFDSimulator = () => {
       let maxValue = -Infinity;
 
       if (colorModeRef.current === "speed") {
-        particles.forEach((particle) => {
+        particles.forEach((particle: any) => {
           const speed = Math.sqrt(
             particle.vx * particle.vx + particle.vy * particle.vy
           );
@@ -872,13 +882,13 @@ const CFDSimulator = () => {
   }, [GRID_WIDTH, GRID_HEIGHT, CELL_SIZE, visualizationMode]); // Add dependencies for quality changes
 
   // Color mapping functions
-  const getSpeedColor = (speed, maxSpeed) => {
+  const getSpeedColor = (speed: number, maxSpeed: number) => {
     const normalized = Math.min(speed / maxSpeed, 1);
     const hue = 240 - normalized * 180; // Blue (240) to Red (60)
     return `hsl(${hue}, 80%, 60%)`;
   };
 
-  const getPressureColor = (pressure, minPressure, maxPressure) => {
+  const getPressureColor = (pressure: number, minPressure: number, maxPressure: number) => {
     const range = Math.max(Math.abs(minPressure), Math.abs(maxPressure));
     if (range === 0) return "hsl(120, 50%, 50%)";
 
@@ -895,7 +905,7 @@ const CFDSimulator = () => {
   };
 
   // Check if click is on close button
-  const isClickOnCloseButton = (clickX, clickY) => {
+  const isClickOnCloseButton = (clickX: number, clickY: number) => {
     if (!analysisPointRef.current || !analysisDataRef.current) return false;
 
     const canvas = canvasRef.current;
@@ -917,7 +927,7 @@ const CFDSimulator = () => {
   };
 
   // Analysis function
-  const analyzePoint = (x, y) => {
+  const analyzePoint = (x: number, y: number) => {
     const gridX = Math.floor(x / CELL_SIZE);
     const gridY = Math.floor(y / CELL_SIZE);
 
@@ -927,7 +937,7 @@ const CFDSimulator = () => {
 
     const idx = gridY * GRID_WIDTH + gridX;
     const { velocityX, velocityY, pressure, obstacles } =
-      simulationState.current;
+      simulationState.current!;
 
     if (obstacles[idx]) {
       return {
@@ -972,7 +982,7 @@ const CFDSimulator = () => {
 
   // Update particles
   const updateParticles = () => {
-    const particles = simulationState.current.particles;
+    const particles = simulationState.current!.particles;
     const dt = 0.016;
 
     // Adjust particle count dynamically
@@ -995,7 +1005,7 @@ const CFDSimulator = () => {
       particles.splice(targetCount);
     }
 
-    particles.forEach((particle) => {
+    particles.forEach((particle: any) => {
       // Get velocity at particle position
       const gridX = particle.x / CELL_SIZE;
       const gridY = particle.y / CELL_SIZE;
@@ -1009,12 +1019,12 @@ const CFDSimulator = () => {
         const vx = interpolateVelocity(
           gridX,
           gridY,
-          simulationState.current.velocityX
+          simulationState.current!.velocityX
         );
         const vy = interpolateVelocity(
           gridX,
           gridY,
-          simulationState.current.velocityY
+          simulationState.current!.velocityY
         );
 
         particle.vx = vx;
@@ -1043,7 +1053,7 @@ const CFDSimulator = () => {
   };
 
   // Drawing functions
-  const getCanvasCoordinates = (e) => {
+  const getCanvasCoordinates = (e: React.MouseEvent) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
 
@@ -1057,8 +1067,8 @@ const CFDSimulator = () => {
     };
   };
 
-  const drawObstacle = (x, y, isErasing = false) => {
-    const obstacles = simulationState.current.obstacles;
+  const drawObstacle = (x: number, y: number, isErasing = false) => {
+    const obstacles = simulationState.current!.obstacles;
     const gridX = Math.floor(x / CELL_SIZE);
     const gridY = Math.floor(y / CELL_SIZE);
     const radius = Math.max(1, Math.floor(brushSize / (CELL_SIZE * 2)));
@@ -1086,8 +1096,8 @@ const CFDSimulator = () => {
 
           // Clear velocity at obstacle locations
           if (!isErasing) {
-            simulationState.current.velocityX[idx] = 0;
-            simulationState.current.velocityY[idx] = 0;
+            simulationState.current!.velocityX[idx] = 0;
+            simulationState.current!.velocityY[idx] = 0;
           }
         }
       }
@@ -1095,10 +1105,10 @@ const CFDSimulator = () => {
   };
 
   // Bezier curve functions
-  const drawBezierCurve = (points, thickness = 3) => {
+  const drawBezierCurve = (points: {x: number, y: number}[], thickness = 3) => {
     if (points.length < 4) return;
 
-    const obstacles = simulationState.current.obstacles;
+    const obstacles = simulationState.current!.obstacles;
 
     // Draw bezier curve using De Casteljau's algorithm
     for (let t = 0; t <= 1; t += 0.01) {
@@ -1123,15 +1133,15 @@ const CFDSimulator = () => {
           if (dx * dx + dy * dy <= radius * radius) {
             const idx = j * GRID_WIDTH + i;
             obstacles[idx] = true;
-            simulationState.current.velocityX[idx] = 0;
-            simulationState.current.velocityY[idx] = 0;
+            simulationState.current!.velocityX[idx] = 0;
+            simulationState.current!.velocityY[idx] = 0;
           }
         }
       }
     }
   };
 
-  const getBezierPoint = (points, t) => {
+  const getBezierPoint = (points: {x: number, y: number}[], t: number) => {
     if (points.length === 4) {
       // Cubic bezier
       const [p0, p1, p2, p3] = points;
@@ -1153,7 +1163,7 @@ const CFDSimulator = () => {
   };
 
   const handleMouseDown = useCallback(
-    (e) => {
+    (e: React.MouseEvent) => {
       e.preventDefault();
       const coords = getCanvasCoordinates(e);
 
@@ -1167,12 +1177,12 @@ const CFDSimulator = () => {
 
       if (drawingMode === "bezier") {
         const newPoint = { x: coords.x, y: coords.y };
-        setCurrentBezier((prev) => {
+        setCurrentBezier((prev: {x: number, y: number}[]) => {
           const updated = [...prev, newPoint];
           if (updated.length === 4) {
             // Complete the bezier curve
             drawBezierCurve(updated, brushSize / 2);
-            setBezierPoints((prevBezier) => [...prevBezier, updated]);
+            setBezierPoints((prevBezier: {x: number, y: number}[][]) => [...prevBezier, updated]);
             if (!isRunning) render();
             return [];
           }
@@ -1196,7 +1206,7 @@ const CFDSimulator = () => {
   );
 
   const handleMouseMove = useCallback(
-    (e) => {
+    (e: React.MouseEvent) => {
       e.preventDefault();
       if (isDrawing && (drawingMode === "draw" || drawingMode === "erase")) {
         const coords = getCanvasCoordinates(e);
@@ -1209,18 +1219,18 @@ const CFDSimulator = () => {
     [isDrawing, drawingMode, drawObstacle, isRunning, render]
   );
 
-  const handleMouseUp = useCallback((e) => {
+  const handleMouseUp = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     setIsDrawing(false);
   }, []);
 
-  const handleMouseLeave = useCallback((e) => {
+  const handleMouseLeave = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     setIsDrawing(false);
   }, []);
 
   const clearObstacles = () => {
-    simulationState.current.obstacles.fill(false);
+    simulationState.current!.obstacles.fill(false);
     if (!isRunning) {
       render();
     }
@@ -1321,7 +1331,7 @@ const CFDSimulator = () => {
 
   // Add keyboard shortcut to close analysis popup
   useEffect(() => {
-    const handleKeyDown = (e) => {
+    const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && analysisPoint) {
         setAnalysisPoint(null);
         setAnalysisData(null);
@@ -1331,7 +1341,7 @@ const CFDSimulator = () => {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [analysisPoint, isRunning]);
+  }, [analysisPoint, isRunning, render]);
 
   const handlePlayPause = () => {
     setIsRunning(!isRunning);
@@ -1341,9 +1351,9 @@ const CFDSimulator = () => {
     setIsRunning(false);
     setTimeout(() => {
       initializeParticles();
-      simulationState.current.velocityX.fill(0);
-      simulationState.current.velocityY.fill(0);
-      simulationState.current.pressure.fill(0);
+      simulationState.current!.velocityX.fill(0);
+      simulationState.current!.velocityY.fill(0);
+      simulationState.current!.pressure.fill(0);
       render();
     }, 100);
   };
@@ -1592,6 +1602,18 @@ const CFDSimulator = () => {
                 </div>
               </div>
             </div>
+            {quality === "ultra" && (
+              <div className="bg-yellow-900 border border-yellow-600 rounded-lg p-4">
+                <h3 className="text-lg font-semibold mb-2 text-yellow-300">
+                  ⚠️ Performance Notice
+                </h3>
+                <p className="text-sm text-yellow-200">
+                  Ultra quality uses a 300×200 grid which may impact performance
+                  on slower devices. Consider using High quality for the best
+                  balance of detail and performance.
+                </p>
+              </div>
+            )}
             <div className="bg-gray-800 rounded-lg p-4">
               <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
                 <Droplets className="w-5 h-5" />
@@ -1823,18 +1845,7 @@ const CFDSimulator = () => {
               </div>
             </div>
 
-            {quality === "ultra" && (
-              <div className="bg-yellow-900 border border-yellow-600 rounded-lg p-4">
-                <h3 className="text-lg font-semibold mb-2 text-yellow-300">
-                  ⚠️ Performance Notice
-                </h3>
-                <p className="text-sm text-yellow-200">
-                  Ultra quality uses a 200×100 grid which may impact performance
-                  on slower devices. Consider using High quality for the best
-                  balance of detail and performance.
-                </p>
-              </div>
-            )}
+          
 
             <div className="bg-gray-800 rounded-lg p-4">
               <h3 className="text-lg font-semibold mb-3">About</h3>
@@ -1914,8 +1925,6 @@ const CFDSimulator = () => {
                   />
                 </div>
 
-      
-
                 <div>
                   <label className="block text-sm font-medium mb-2">
                     Wind Speed: {settings.windSpeed.toFixed(1)}
@@ -1976,11 +1985,8 @@ const CFDSimulator = () => {
                     className="w-full"
                   />
                 </div>
-
               </div>
             </div>
-
-           
           </div>
         </div>
       </div>
