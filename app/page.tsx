@@ -1503,14 +1503,14 @@ const CFDSimulator = () => {
                       1.5x
                     </button>
                     <button
-                      onClick={() => setPlaybackSpeed(2.0)}
+                      onClick={() => setPlaybackSpeed(4.0)}
                       className={`px-2 py-1 rounded text-xs transition-colors ${
-                        playbackSpeed === 2.0
+                        playbackSpeed === 4.0
                           ? "bg-blue-600 text-white"
                           : "text-gray-300 hover:text-white"
                       }`}
                     >
-                      2x
+                      4x
                     </button>
                   </div>
 
@@ -1868,7 +1868,7 @@ const CFDSimulator = () => {
                     <option value="low">Low (80×40) - Fast</option>
                     <option value="medium">Medium (120×60) - Balanced</option>
                     <option value="high">High (160×80) - Detailed</option>
-                    <option value="ultra">Ultra (200×100) - Maximum</option>
+                    <option value="ultra">Ultra (300×200) - Maximum</option>
                   </select>
                   <p className="text-xs text-gray-500 mt-1">
                     Higher quality = more accurate simulation but slower
@@ -1914,22 +1914,7 @@ const CFDSimulator = () => {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Playback Speed: {playbackSpeed.toFixed(2)}x
-                  </label>
-                  <input
-                    type="range"
-                    min="0.25"
-                    max="4.0"
-                    step="0.25"
-                    value={playbackSpeed}
-                    onChange={(e) =>
-                      setPlaybackSpeed(parseFloat(e.target.value))
-                    }
-                    className="w-full"
-                  />
-                </div>
+      
 
                 <div>
                   <label className="block text-sm font-medium mb-2">
@@ -1992,28 +1977,6 @@ const CFDSimulator = () => {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Default Obstacle Size: {settings.obstacleSize}
-                  </label>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    step="10"
-                    value={settings.obstacleSize}
-                    onChange={(e) =>
-                      setSettings((prev) => ({
-                        ...prev,
-                        obstacleSize: parseInt(e.target.value),
-                      }))
-                    }
-                    className="w-full"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Set to 0 to start with no default obstacle
-                  </p>
-                </div>
               </div>
             </div>
 
