@@ -27,7 +27,7 @@ const CFDSimulator = () => {
   const [settings, setSettings] = useState({
     viscosity: 0.02,
     density: 1.0,
-    windSpeed: 5.0,
+    windSpeed: 22.0,
     particleCount: 5000,
     showVelocityField: true,
     showPressureField: false,
@@ -44,21 +44,28 @@ const CFDSimulator = () => {
 
   const [visualizationMode, setVisualizationMode] = useState("standard"); // 'standard' or 'pressure'
   const [quality, setQuality] = useState("medium"); // 'low', 'medium', 'high', 'ultra'
-  const [bezierPoints, setBezierPoints] = useState<{x: number, y: number}[][]>([]);
-  const [currentBezier, setCurrentBezier] = useState<{x: number, y: number}[]>([]);
+  const [bezierPoints, setBezierPoints] = useState<
+    { x: number; y: number }[][]
+  >([]);
+  const [currentBezier, setCurrentBezier] = useState<
+    { x: number; y: number }[]
+  >([]);
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0); // 0.5x, 1x, 1.25x, 1.5x, 2x
   const [colorMode, setColorMode] = useState("speed"); // 'speed' or 'pressure'
   const [showScale, setShowScale] = useState(true);
-  const [analysisPoint, setAnalysisPoint] = useState<{x: number, y: number} | null>(null);
+  const [analysisPoint, setAnalysisPoint] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
   const [analysisData, setAnalysisData] = useState<any>(null);
 
   // Use refs to access current analysis data in render function
-  const analysisPointRef = useRef<{x: number, y: number} | null>(null);
+  const analysisPointRef = useRef<{ x: number; y: number } | null>(null);
   const analysisDataRef = useRef<any>(null);
   const colorModeRef = useRef(colorMode);
   const showScaleRef = useRef(showScale);
   const drawingModeRef = useRef(drawingMode);
-  const currentBezierRef = useRef<{x: number, y: number}[]>(currentBezier);
+  const currentBezierRef = useRef<{ x: number; y: number }[]>(currentBezier);
 
   // Update refs when state changes
   useEffect(() => {
@@ -79,7 +86,10 @@ const CFDSimulator = () => {
 
   // Grid dimensions based on quality - use useMemo to recalculate when quality changes
   const { GRID_WIDTH, GRID_HEIGHT, CELL_SIZE } = useMemo(() => {
-    const qualitySettings: Record<string, {width: number, height: number, cellSize: number}> = {
+    const qualitySettings: Record<
+      string,
+      { width: number; height: number; cellSize: number }
+    > = {
       low: { width: 80, height: 40, cellSize: 10 },
       medium: { width: 120, height: 60, cellSize: 8 },
       high: { width: 160, height: 80, cellSize: 6 },
@@ -99,7 +109,7 @@ const CFDSimulator = () => {
     velocityY: number[];
     pressure: number[];
     obstacles: boolean[];
-    particles: {x: number, y: number, vx: number, vy: number, life: number}[];
+    particles: { x: number; y: number; vx: number; vy: number; life: number }[];
     currentGridWidth: number;
     currentGridHeight: number;
   }
@@ -212,10 +222,22 @@ const CFDSimulator = () => {
           velocityY[idx] = velocityY[idx - 1];
         }
 
-        // Top and bottom boundaries - no slip
-        if (j === 0 || j === GRID_HEIGHT - 1) {
-          velocityX[idx] = 0;
+        // Top and bottom boundaries - slip conditions
+        if (j === 0) {
+          // Top boundary: no vertical flow, but allow horizontal flow
           velocityY[idx] = 0;
+          // Copy horizontal velocity from interior
+          if (j + 1 < GRID_HEIGHT) {
+            velocityX[idx] = velocityX[(j + 1) * GRID_WIDTH + i];
+          }
+        }
+        if (j === GRID_HEIGHT - 1) {
+          // Bottom boundary: no vertical flow, but allow horizontal flow
+          velocityY[idx] = 0;
+          // Copy horizontal velocity from interior
+          if (j - 1 >= 0) {
+            velocityX[idx] = velocityX[(j - 1) * GRID_WIDTH + i];
+          }
         }
 
         // Obstacles - no slip
@@ -888,7 +910,11 @@ const CFDSimulator = () => {
     return `hsl(${hue}, 80%, 60%)`;
   };
 
-  const getPressureColor = (pressure: number, minPressure: number, maxPressure: number) => {
+  const getPressureColor = (
+    pressure: number,
+    minPressure: number,
+    maxPressure: number
+  ) => {
     const range = Math.max(Math.abs(minPressure), Math.abs(maxPressure));
     if (range === 0) return "hsl(120, 50%, 50%)";
 
@@ -990,18 +1016,43 @@ const CFDSimulator = () => {
     const currentCount = particles.length;
 
     if (currentCount < targetCount) {
-      // Add particles
-      for (let i = currentCount; i < targetCount; i++) {
-        particles.push({
-          x: Math.random() * GRID_WIDTH * CELL_SIZE,
-          y: Math.random() * GRID_HEIGHT * CELL_SIZE,
-          vx: 0,
-          vy: 0,
-          life: 1.0,
-        });
+      // Add particles distributed across the canvas proportionally
+      const particlesToAdd = targetCount - currentCount;
+      
+      // If we have existing particles, distribute new ones proportionally
+      if (currentCount > 0) {
+        for (let i = 0; i < particlesToAdd; i++) {
+          // Choose a random existing particle to use as a reference
+          const refParticle = particles[Math.floor(Math.random() * currentCount)];
+          
+          // Add some randomness around the reference particle's position
+          const spreadX = CELL_SIZE * 10; // Horizontal spread
+          const spreadY = CELL_SIZE * 5;  // Vertical spread
+          
+          particles.push({
+            x: Math.max(0, Math.min(GRID_WIDTH * CELL_SIZE, 
+                refParticle.x + (Math.random() - 0.5) * spreadX)),
+            y: Math.max(0, Math.min(GRID_HEIGHT * CELL_SIZE, 
+                refParticle.y + (Math.random() - 0.5) * spreadY)),
+            vx: refParticle.vx + (Math.random() - 0.5) * 0.5, // Small velocity variation
+            vy: refParticle.vy + (Math.random() - 0.5) * 0.5,
+            life: Math.random() * 0.5 + 0.5, // Random life between 0.5-1.0
+          });
+        }
+      } else {
+        // If no existing particles, distribute uniformly across canvas
+        for (let i = 0; i < particlesToAdd; i++) {
+          particles.push({
+            x: Math.random() * GRID_WIDTH * CELL_SIZE,
+            y: Math.random() * GRID_HEIGHT * CELL_SIZE,
+            vx: 0,
+            vy: 0,
+            life: 1.0,
+          });
+        }
       }
     } else if (currentCount > targetCount) {
-      // Remove particles
+      // Remove particles from the end (oldest particles)
       particles.splice(targetCount);
     }
 
@@ -1009,6 +1060,27 @@ const CFDSimulator = () => {
       // Get velocity at particle position
       const gridX = particle.x / CELL_SIZE;
       const gridY = particle.y / CELL_SIZE;
+
+      // Check if particle is inside an obstacle
+      const particleGridX = Math.floor(gridX);
+      const particleGridY = Math.floor(gridY);
+      const particleIdx = particleGridY * GRID_WIDTH + particleGridX;
+
+      if (
+        particleGridX >= 0 &&
+        particleGridX < GRID_WIDTH &&
+        particleGridY >= 0 &&
+        particleGridY < GRID_HEIGHT &&
+        simulationState.current!.obstacles[particleIdx]
+      ) {
+        // Particle is inside obstacle - respawn at inlet
+        particle.x = Math.random() * CELL_SIZE * 3;
+        particle.y = Math.random() * GRID_HEIGHT * CELL_SIZE;
+        particle.vx = settingsRef.current.windSpeed;
+        particle.vy = 0;
+        particle.life = 1.0;
+        return; // Skip further processing for this particle
+      }
 
       if (
         gridX >= 0 &&
@@ -1029,27 +1101,80 @@ const CFDSimulator = () => {
 
         particle.vx = vx;
         particle.vy = vy;
+
+        // Update position
         particle.x += vx * dt * CELL_SIZE;
         particle.y += vy * dt * CELL_SIZE;
+
+        // Check if new position is inside an obstacle
+        const newGridX = Math.floor(particle.x / CELL_SIZE);
+        const newGridY = Math.floor(particle.y / CELL_SIZE);
+        const newIdx = newGridY * GRID_WIDTH + newGridX;
+
+        if (
+          newGridX >= 0 &&
+          newGridX < GRID_WIDTH &&
+          newGridY >= 0 &&
+          newGridY < GRID_HEIGHT &&
+          simulationState.current!.obstacles[newIdx]
+        ) {
+          // Collision detected - respawn particle at inlet
+          particle.x = Math.random() * CELL_SIZE * 3;
+          particle.y = Math.random() * GRID_HEIGHT * CELL_SIZE;
+          particle.vx = settingsRef.current.windSpeed;
+          particle.vy = 0;
+          particle.life = 1.0;
+        }
       }
 
-      // Wrap around or respawn particles
-      if (
-        particle.x > GRID_WIDTH * CELL_SIZE ||
-        particle.x < 0 ||
-        particle.y > GRID_HEIGHT * CELL_SIZE ||
-        particle.y < 0
-      ) {
-        particle.x = Math.random() * CELL_SIZE * 5;
+      // Handle boundary conditions - maintain consistent flow
+      if (particle.x > GRID_WIDTH * CELL_SIZE) {
+        // Particle exits right side - respawn from left (inlet)
+        particle.x = Math.random() * CELL_SIZE * 3; // Small inlet region
         particle.y = Math.random() * GRID_HEIGHT * CELL_SIZE;
+        particle.vx = settingsRef.current.windSpeed;
+        particle.vy = 0;
+        particle.life = 1.0;
+      } else if (particle.x < 0) {
+        // Particle exits left side - respawn from left (inlet)
+        particle.x = Math.random() * CELL_SIZE * 3;
+        particle.y = Math.random() * GRID_HEIGHT * CELL_SIZE;
+        particle.vx = settingsRef.current.windSpeed;
+        particle.vy = 0;
+        particle.life = 1.0;
+      } else if (particle.y > GRID_HEIGHT * CELL_SIZE || particle.y < 0) {
+        // Particle hits top/bottom boundaries - respawn from inlet for consistent flow
+        particle.x = Math.random() * CELL_SIZE * 3;
+        particle.y = Math.random() * GRID_HEIGHT * CELL_SIZE;
+        particle.vx = settingsRef.current.windSpeed;
+        particle.vy = 0;
         particle.life = 1.0;
       }
 
-      particle.life *= 0.999;
-      if (particle.life < 0.1) {
+      // Reduce life slowly but don't remove particles based on life
+      particle.life *= 0.9995; // Changed from 0.999 to make it even slower
+      if (particle.life < 0.01) {
+        // Only reset when very low
         particle.life = 1.0;
+        // Optionally respawn at inlet when life expires
+        particle.x = Math.random() * CELL_SIZE * 3;
+        particle.y = Math.random() * GRID_HEIGHT * CELL_SIZE;
       }
     });
+
+    // Final safety check: ensure we always have the right number of particles
+    const finalCount = particles.length;
+    if (finalCount < targetCount) {
+      for (let i = finalCount; i < targetCount; i++) {
+        particles.push({
+          x: Math.random() * CELL_SIZE * 5,
+          y: Math.random() * GRID_HEIGHT * CELL_SIZE,
+          vx: 0,
+          vy: 0,
+          life: 1.0,
+        });
+      }
+    }
   };
 
   // Drawing functions
@@ -1105,7 +1230,10 @@ const CFDSimulator = () => {
   };
 
   // Bezier curve functions
-  const drawBezierCurve = (points: {x: number, y: number}[], thickness = 3) => {
+  const drawBezierCurve = (
+    points: { x: number; y: number }[],
+    thickness = 3
+  ) => {
     if (points.length < 4) return;
 
     const obstacles = simulationState.current!.obstacles;
@@ -1141,7 +1269,7 @@ const CFDSimulator = () => {
     }
   };
 
-  const getBezierPoint = (points: {x: number, y: number}[], t: number) => {
+  const getBezierPoint = (points: { x: number; y: number }[], t: number) => {
     if (points.length === 4) {
       // Cubic bezier
       const [p0, p1, p2, p3] = points;
@@ -1177,12 +1305,15 @@ const CFDSimulator = () => {
 
       if (drawingMode === "bezier") {
         const newPoint = { x: coords.x, y: coords.y };
-        setCurrentBezier((prev: {x: number, y: number}[]) => {
+        setCurrentBezier((prev: { x: number; y: number }[]) => {
           const updated = [...prev, newPoint];
           if (updated.length === 4) {
             // Complete the bezier curve
             drawBezierCurve(updated, brushSize / 2);
-            setBezierPoints((prevBezier: {x: number, y: number}[][]) => [...prevBezier, updated]);
+            setBezierPoints((prevBezier: { x: number; y: number }[][]) => [
+              ...prevBezier,
+              updated,
+            ]);
             if (!isRunning) render();
             return [];
           }
@@ -1844,8 +1975,6 @@ const CFDSimulator = () => {
                 </p>
               </div>
             </div>
-
-          
 
             <div className="bg-gray-800 rounded-lg p-4">
               <h3 className="text-lg font-semibold mb-3">About</h3>
