@@ -187,7 +187,7 @@ const AirfoilAnalyzer: React.FC = () => {
 
     // Simulate realistic CFD computation time based on complexity
     const computationTime = Math.random() * 800 + 200; // 200-1000ms
-    await new Promise(resolve => setTimeout(resolve, computationTime));
+    await new Promise((resolve) => setTimeout(resolve, computationTime));
 
     // More sophisticated coefficient calculation using airfoil shape analysis
     let Cl = 0;
@@ -195,21 +195,26 @@ const AirfoilAnalyzer: React.FC = () => {
     let Cm = 0;
 
     // Analyze airfoil geometry for better predictions
-    const chordLength = Math.max(...data.points.map(p => p.x)) - Math.min(...data.points.map(p => p.x));
-    const maxThickness = Math.max(...data.upperSurface.map(p => p.y)) - Math.min(...data.lowerSurface.map(p => p.y));
+    const chordLength =
+      Math.max(...data.points.map((p) => p.x)) -
+      Math.min(...data.points.map((p) => p.x));
+    const maxThickness =
+      Math.max(...data.upperSurface.map((p) => p.y)) -
+      Math.min(...data.lowerSurface.map((p) => p.y));
     const thicknessRatio = maxThickness / chordLength;
-    
+
     // Calculate camber line and camber ratio
     const camberLine = [];
     for (let i = 0; i < data.upperSurface.length; i++) {
       const upperPoint = data.upperSurface[i];
       // Find corresponding lower surface point
-      const lowerPoint = data.lowerSurface.find(p => Math.abs(p.x - upperPoint.x) < 0.01) || 
-                        data.lowerSurface[data.lowerSurface.length - 1 - i];
+      const lowerPoint =
+        data.lowerSurface.find((p) => Math.abs(p.x - upperPoint.x) < 0.01) ||
+        data.lowerSurface[data.lowerSurface.length - 1 - i];
       const camberY = (upperPoint.y + lowerPoint.y) / 2;
       camberLine.push({ x: upperPoint.x, y: camberY });
     }
-    const maxCamber = Math.max(...camberLine.map(p => Math.abs(p.y)));
+    const maxCamber = Math.max(...camberLine.map((p) => Math.abs(p.y)));
     const camberRatio = maxCamber / chordLength;
 
     // Detect airfoil type for more accurate modeling
@@ -217,20 +222,24 @@ const AirfoilAnalyzer: React.FC = () => {
     const isHighCamber = camberRatio > 0.03;
     const isThick = thicknessRatio > 0.15;
 
-    console.log(`Airfoil analysis: Camber ratio: ${camberRatio.toFixed(4)}, Thickness ratio: ${thicknessRatio.toFixed(4)}`);
+    console.log(
+      `Airfoil analysis: Camber ratio: ${camberRatio.toFixed(
+        4
+      )}, Thickness ratio: ${thicknessRatio.toFixed(4)}`
+    );
 
     // Enhanced lift coefficient calculation with stall modeling
     if (Math.abs(alpha) < 12) {
       // Linear region with realistic slope
       let Cl_alpha = 2 * Math.PI; // Theoretical thin airfoil value
-      
+
       // Adjust for airfoil characteristics
       if (isSymmetric) {
         Cl_alpha *= 1.05; // Symmetric airfoils slightly higher
       } else {
         Cl_alpha *= 0.95; // Cambered airfoils slightly lower due to viscosity
       }
-      
+
       if (isThick) {
         Cl_alpha *= 0.9; // Thick airfoils have reduced slope
       }
@@ -240,18 +249,19 @@ const AirfoilAnalyzer: React.FC = () => {
       Cl_alpha = Cl_alpha / (1 + Cl_alpha / (Math.PI * aspectRatio));
 
       Cl = Cl_alpha * alphaRad;
-      
+
       // Add camber effect (zero-lift angle)
       if (!isSymmetric) {
         const alphaZeroLift = -camberRatio * 4; // Approximate zero-lift angle
-        Cl += Cl_alpha * (alphaZeroLift * Math.PI / 180);
+        Cl += Cl_alpha * ((alphaZeroLift * Math.PI) / 180);
       }
-      
     } else if (Math.abs(alpha) < 18) {
       // Post-stall region - gradual reduction
       const stallAlpha = 12;
       const stallCl = 1.2;
-      const postStallFactor = Math.cos(Math.PI * (Math.abs(alpha) - stallAlpha) / 12);
+      const postStallFactor = Math.cos(
+        (Math.PI * (Math.abs(alpha) - stallAlpha)) / 12
+      );
       Cl = stallCl * postStallFactor * Math.sign(alpha);
     } else {
       // Deep stall - sinusoidal behavior
@@ -261,24 +271,24 @@ const AirfoilAnalyzer: React.FC = () => {
     // Enhanced drag coefficient calculation
     const Cd0_base = isSymmetric ? 0.006 : 0.008; // Profile drag
     const Cd0 = Cd0_base * (1 + thicknessRatio * 2); // Thickness penalty
-    
+
     // Induced drag
     const aspectRatio = 6;
     const e = 0.85; // Oswald efficiency factor
     const Cdi = (Cl * Cl) / (Math.PI * aspectRatio * e);
-    
+
     // Viscous drag increase with angle
     let viscousDrag = 0;
     if (Math.abs(alpha) > 5) {
       viscousDrag = 0.002 * Math.pow((Math.abs(alpha) - 5) / 10, 2);
     }
-    
+
     // Separation drag (post-stall)
     let separationDrag = 0;
     if (Math.abs(alpha) > 12) {
-      separationDrag = 0.5 * Math.sin(Math.PI * (Math.abs(alpha) - 12) / 18);
+      separationDrag = 0.5 * Math.sin((Math.PI * (Math.abs(alpha) - 12)) / 18);
     }
-    
+
     Cd = Cd0 + Cdi + viscousDrag + separationDrag;
 
     // Moment coefficient calculation
@@ -297,18 +307,20 @@ const AirfoilAnalyzer: React.FC = () => {
     const kinematicViscosity = 1.81e-5; // Air at sea level
     const Re = (windSpeed * referenceChord) / kinematicViscosity;
     const ReCorrection = Math.log10(Re / 100000) * 0.1;
-    
+
     // Reynolds number affects both lift and drag
     if (Re < 500000) {
       // Lower Reynolds number - reduced performance
-      Cl *= (0.9 + 0.1 * Math.log10(Re / 50000));
-      Cd *= (1.2 - 0.2 * Math.log10(Re / 50000));
+      Cl *= 0.9 + 0.1 * Math.log10(Re / 50000);
+      Cd *= 1.2 - 0.2 * Math.log10(Re / 50000);
     } else {
       // Higher Reynolds number - slightly better performance
-      Cd *= (1 - ReCorrection * 0.1);
+      Cd *= 1 - ReCorrection * 0.1;
     }
 
-    console.log(`Reynolds Number: ${Re.toExponential(2)}, Wind Speed: ${windSpeed} m/s`);
+    console.log(
+      `Reynolds Number: ${Re.toExponential(2)}, Wind Speed: ${windSpeed} m/s`
+    );
 
     const newCoefficient: AerodynamicCoefficients = {
       Cl: parseFloat(Cl.toFixed(4)),
@@ -318,7 +330,9 @@ const AirfoilAnalyzer: React.FC = () => {
     };
 
     // Add Cl/Cd ratio for Recharts
-    (newCoefficient as any)["Cl/Cd"] = parseFloat((Cl / Math.max(Cd, 0.001)).toFixed(2));
+    (newCoefficient as any)["Cl/Cd"] = parseFloat(
+      (Cl / Math.max(Cd, 0.001)).toFixed(2)
+    );
 
     // Update coefficients array
     setCoefficients((prev) => {
@@ -576,7 +590,7 @@ const AirfoilAnalyzer: React.FC = () => {
     // Create world domain (extended for flow visualization)
     const chordLength = airfoilMaxX - airfoilMinX;
     const airfoilHeight = airfoilMaxY - airfoilMinY;
-    
+
     // World domain bounds
     const worldMinX = airfoilMinX - chordLength * 1.0;
     const worldMaxX = airfoilMaxX + chordLength * 1.5;
@@ -599,15 +613,21 @@ const AirfoilAnalyzer: React.FC = () => {
     for (let py = 0; py < canvasHeight; py += step) {
       for (let px = 0; px < canvasWidth; px += step) {
         const world = pixelToWorld(px, py);
-        
+
         // Check if inside airfoil using simple point-in-polygon
         let isInside = false;
-        for (let i = 0, j = airfoilData.points.length - 1; i < airfoilData.points.length; j = i++) {
+        for (
+          let i = 0, j = airfoilData.points.length - 1;
+          i < airfoilData.points.length;
+          j = i++
+        ) {
           const pi = airfoilData.points[i];
           const pj = airfoilData.points[j];
-          
-          if (((pi.y > world.y) !== (pj.y > world.y)) &&
-              (world.x < (pj.x - pi.x) * (world.y - pi.y) / (pj.y - pi.y) + pi.x)) {
+
+          if (
+            pi.y > world.y !== pj.y > world.y &&
+            world.x < ((pj.x - pi.x) * (world.y - pi.y)) / (pj.y - pi.y) + pi.x
+          ) {
             isInside = !isInside;
           }
         }
@@ -619,8 +639,14 @@ const AirfoilAnalyzer: React.FC = () => {
         } else {
           // Outside - calculate pressure
           const pressure = calculateRealisticPressure(
-            world.x, world.y, airfoilData, angleOfAttack, 
-            worldMinX, worldMaxX, worldMinY, worldMaxY
+            world.x,
+            world.y,
+            airfoilData,
+            angleOfAttack,
+            worldMinX,
+            worldMaxX,
+            worldMinY,
+            worldMaxY
           );
           color = getANSYSPressureColor(pressure);
         }
@@ -643,8 +669,10 @@ const AirfoilAnalyzer: React.FC = () => {
 
     // World-to-canvas coordinate conversion function
     const worldToCanvas = (worldX: number, worldY: number) => {
-      const canvasX = ((worldX - worldMinX) / (worldMaxX - worldMinX)) * canvasWidth;
-      const canvasY = ((worldMaxY - worldY) / (worldMaxY - worldMinY)) * canvasHeight;
+      const canvasX =
+        ((worldX - worldMinX) / (worldMaxX - worldMinX)) * canvasWidth;
+      const canvasY =
+        ((worldMaxY - worldY) / (worldMaxY - worldMinY)) * canvasHeight;
       return { x: canvasX, y: canvasY };
     };
 
@@ -655,14 +683,20 @@ const AirfoilAnalyzer: React.FC = () => {
 
     // Draw complete airfoil path
     if (airfoilData.points.length > 0) {
-      const firstPoint = worldToCanvas(airfoilData.points[0].x, airfoilData.points[0].y);
+      const firstPoint = worldToCanvas(
+        airfoilData.points[0].x,
+        airfoilData.points[0].y
+      );
       ctx.moveTo(firstPoint.x, firstPoint.y);
 
       for (let i = 1; i < airfoilData.points.length; i++) {
-        const point = worldToCanvas(airfoilData.points[i].x, airfoilData.points[i].y);
+        const point = worldToCanvas(
+          airfoilData.points[i].x,
+          airfoilData.points[i].y
+        );
         ctx.lineTo(point.x, point.y);
       }
-      
+
       // Close the path
       ctx.closePath();
       ctx.stroke();
@@ -673,17 +707,32 @@ const AirfoilAnalyzer: React.FC = () => {
     ctx.font = "16px Arial";
     ctx.fillText(`Pressure Distribution - ${airfoilData.name}`, 20, 30);
     ctx.font = "12px Arial";
-    ctx.fillText(`AoA: ${angleOfAttack}°, Wind Speed: ${windSpeed} m/s`, 20, 50);
+    ctx.fillText(
+      `AoA: ${angleOfAttack}°, Wind Speed: ${windSpeed} m/s`,
+      20,
+      50
+    );
   };
 
   // Calculate realistic pressure at a point using enhanced CFD principles
-  const calculateRealisticPressure = (worldX: number, worldY: number, airfoilData: AirfoilData, angleOfAttack: number, minX: number, maxX: number, minY: number, maxY: number) => {
+  const calculateRealisticPressure = (
+    worldX: number,
+    worldY: number,
+    airfoilData: AirfoilData,
+    angleOfAttack: number,
+    minX: number,
+    maxX: number,
+    minY: number,
+    maxY: number
+  ) => {
     // Find closest point on airfoil surface with higher precision
     let closestPoint = { x: 0, y: 0 };
     let minDist = Infinity;
 
     for (const point of airfoilData.points) {
-      const dist = Math.sqrt(Math.pow(worldX - point.x, 2) + Math.pow(worldY - point.y, 2));
+      const dist = Math.sqrt(
+        Math.pow(worldX - point.x, 2) + Math.pow(worldY - point.y, 2)
+      );
       if (dist < minDist) {
         minDist = dist;
         closestPoint = point;
@@ -699,7 +748,7 @@ const AirfoilAnalyzer: React.FC = () => {
     // Calculate dynamic pressure based on wind speed
     const rho = 1.225; // Air density at sea level (kg/m³)
     const dynamicPressure = 0.5 * rho * Math.pow(windSpeed, 2);
-    
+
     let pressureCoeff = 0; // Pressure coefficient (Cp)
 
     // Ultra-precise pressure distribution with sharper gradients
@@ -709,13 +758,14 @@ const AirfoilAnalyzer: React.FC = () => {
     if (normalizedX < 0.08) {
       // Very strong stagnation pressure at leading edge with precise falloff
       const stagnationFactor = Math.exp(-Math.pow((normalizedX - 0) * 18, 2));
-      
+
       if (Math.abs(relativeY) < 0.015) {
         // Right at the stagnation point - very high pressure (RED)
         pressureCoeff = 1.2 + stagnationFactor * 1.8;
       } else if (relativeY > 0.015) {
         // Above leading edge - very strong suction (DEEP BLUE)
-        pressureCoeff = -2.8 - 1.8 * Math.abs(alphaRad) * (1 + stagnationFactor);
+        pressureCoeff =
+          -2.8 - 1.8 * Math.abs(alphaRad) * (1 + stagnationFactor);
       } else {
         // Below leading edge - high pressure (BRIGHT RED-ORANGE)
         pressureCoeff = 1.0 + 1.5 * Math.abs(alphaRad) * (1 + stagnationFactor);
@@ -723,19 +773,26 @@ const AirfoilAnalyzer: React.FC = () => {
     }
     // Upper surface suction peak region (0.08 to 0.35 chord) - refined bounds
     else if (normalizedX < 0.35) {
-      const suctionPeakFactor = Math.exp(-Math.pow((normalizedX - 0.18) * 12, 2));
-      
+      const suctionPeakFactor = Math.exp(
+        -Math.pow((normalizedX - 0.18) * 12, 2)
+      );
+
       if (relativeY > 0.008) {
         // Upper surface - create dramatic suction peak (DARKEST BLUE)
-        pressureCoeff = -2.2 - 2.5 * Math.sin(alphaRad) - suctionPeakFactor * 2.0;
-        
+        pressureCoeff =
+          -2.2 - 2.5 * Math.sin(alphaRad) - suctionPeakFactor * 2.0;
+
         // Add extra suction for cambered airfoils with more precision
-        if (airfoilData.name.includes('2412') || airfoilData.name.includes('4412')) {
+        if (
+          airfoilData.name.includes("2412") ||
+          airfoilData.name.includes("4412")
+        ) {
           pressureCoeff -= 1.2;
         }
       } else if (relativeY < -0.008) {
         // Lower surface - positive pressure (YELLOW-ORANGE-RED)
-        pressureCoeff = 0.8 + 1.8 * Math.sin(alphaRad) + suctionPeakFactor * 1.2;
+        pressureCoeff =
+          0.8 + 1.8 * Math.sin(alphaRad) + suctionPeakFactor * 1.2;
       } else {
         // Very close to surface - smooth transition
         pressureCoeff = -0.3 + 0.7 * Math.sin(alphaRad);
@@ -744,7 +801,7 @@ const AirfoilAnalyzer: React.FC = () => {
     // Mid-chord region (0.35 to 0.65 chord) - pressure recovery with precision
     else if (normalizedX < 0.65) {
       const recoveryFactor = (normalizedX - 0.35) / 0.3;
-      
+
       if (relativeY > 0.008) {
         // Upper surface - smooth pressure recovery but still strong suction (BLUE-CYAN)
         pressureCoeff = -1.5 - 1.3 * Math.sin(alphaRad) + recoveryFactor * 0.8;
@@ -759,10 +816,10 @@ const AirfoilAnalyzer: React.FC = () => {
     // Trailing edge region (0.65 to 1.0 chord) - refined Kutta condition
     else {
       const trailingFactor = (normalizedX - 0.65) / 0.35;
-      
+
       // Kutta condition - pressures should match at trailing edge with precision
       const baseTrailingPressure = -0.25 - 0.15 * Math.sin(alphaRad);
-      
+
       if (relativeY > 0.008) {
         // Upper surface - approach trailing edge pressure (CYAN-GREEN)
         pressureCoeff = baseTrailingPressure - 0.3 * (1 - trailingFactor);
@@ -781,7 +838,7 @@ const AirfoilAnalyzer: React.FC = () => {
     // Add circulation effects for angle of attack with higher precision
     const circulationStrength = 2.5 * Math.sin(alphaRad); // Enhanced circulation
     const circulationDecay = Math.exp(-distanceFromSurface * 10); // Sharper circulation boundary
-    
+
     if (relativeY > 0.003) {
       // Above airfoil - enhance suction with precision
       pressureCoeff -= circulationStrength * circulationDecay;
@@ -801,7 +858,7 @@ const AirfoilAnalyzer: React.FC = () => {
       const farFieldFactor = Math.exp(-distanceFromSurface * 5);
       pressureCoeff = -0.08 * Math.sin(alphaRad) * farFieldFactor;
     }
-    
+
     return pressureCoeff;
   };
 
@@ -810,64 +867,78 @@ const AirfoilAnalyzer: React.FC = () => {
     // Normalize pressure to 0-1 range with better distribution
     const minP = -3.0; // Extended range for better color separation
     const maxP = 2.0;
-    let normalized = Math.max(0, Math.min(1, (pressure - minP) / (maxP - minP)));
-    
+    let normalized = Math.max(
+      0,
+      Math.min(1, (pressure - minP) / (maxP - minP))
+    );
+
     // Apply gamma correction for better visual contrast
     normalized = Math.pow(normalized, 0.8);
-    
+
     // Enhanced ANSYS Fluent color scheme with more vibrant colors
     const colors = [
-      { r: 0, g: 0, b: 180 },      // Dark blue (very low pressure)
-      { r: 0, g: 50, b: 255 },     // Blue (low pressure)
-      { r: 0, g: 150, b: 255 },    // Light blue
-      { r: 0, g: 255, b: 255 },    // Cyan
-      { r: 0, g: 255, b: 150 },    // Green-cyan
-      { r: 50, g: 255, b: 50 },    // Green (neutral)
-      { r: 150, g: 255, b: 0 },    // Yellow-green
-      { r: 255, g: 255, b: 0 },    // Yellow
-      { r: 255, g: 180, b: 0 },    // Orange
-      { r: 255, g: 100, b: 0 },    // Red-orange
-      { r: 255, g: 0, b: 0 },      // Red (high pressure)
-      { r: 180, g: 0, b: 0 }       // Dark red (very high pressure)
+      { r: 0, g: 0, b: 180 }, // Dark blue (very low pressure)
+      { r: 0, g: 50, b: 255 }, // Blue (low pressure)
+      { r: 0, g: 150, b: 255 }, // Light blue
+      { r: 0, g: 255, b: 255 }, // Cyan
+      { r: 0, g: 255, b: 150 }, // Green-cyan
+      { r: 50, g: 255, b: 50 }, // Green (neutral)
+      { r: 150, g: 255, b: 0 }, // Yellow-green
+      { r: 255, g: 255, b: 0 }, // Yellow
+      { r: 255, g: 180, b: 0 }, // Orange
+      { r: 255, g: 100, b: 0 }, // Red-orange
+      { r: 255, g: 0, b: 0 }, // Red (high pressure)
+      { r: 180, g: 0, b: 0 }, // Dark red (very high pressure)
     ];
-    
+
     // Smooth interpolation between colors
     const scaledIndex = normalized * (colors.length - 1);
     const lowerIndex = Math.floor(scaledIndex);
     const upperIndex = Math.min(Math.ceil(scaledIndex), colors.length - 1);
     const t = scaledIndex - lowerIndex;
-    
+
     const lowerColor = colors[lowerIndex];
     const upperColor = colors[upperIndex];
-    
+
     return {
       r: Math.round(lowerColor.r + t * (upperColor.r - lowerColor.r)),
       g: Math.round(lowerColor.g + t * (upperColor.g - lowerColor.g)),
-      b: Math.round(lowerColor.b + t * (upperColor.b - lowerColor.b))
+      b: Math.round(lowerColor.b + t * (upperColor.b - lowerColor.b)),
     };
   };
 
   // Draw pressure contour lines
-  const drawPressureContours = (ctx: CanvasRenderingContext2D, centerX: number, centerY: number, scale: number, minX: number, maxX: number, minY: number, maxY: number, canvasWidth: number, canvasHeight: number) => {
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+  const drawPressureContours = (
+    ctx: CanvasRenderingContext2D,
+    centerX: number,
+    centerY: number,
+    scale: number,
+    minX: number,
+    maxX: number,
+    minY: number,
+    maxY: number,
+    canvasWidth: number,
+    canvasHeight: number
+  ) => {
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
     ctx.lineWidth = 1;
-    
+
     const contourLevels = [-1.5, -1.0, -0.5, 0, 0.5, 1.0];
-    
+
     for (const level of contourLevels) {
       ctx.beginPath();
-      
+
       // Draw contour lines by sampling the pressure field
       for (let y = 20; y < canvasHeight - 20; y += 10) {
         let lastX = null;
         let lastPressure = null;
-        
+
         for (let x = 20; x < canvasWidth - 20; x += 2) {
           const worldX = (x - centerX) / scale + (minX + maxX) / 2;
           const worldY = (centerY - y) / scale + (minY + maxY) / 2;
-          
+
           if (!airfoilData) continue;
-          
+
           // Check if outside airfoil
           let windingNumber = 0;
           for (let k = 0; k < airfoilData.points.length; k++) {
@@ -875,30 +946,52 @@ const AirfoilAnalyzer: React.FC = () => {
             const p2 = airfoilData.points[(k + 1) % airfoilData.points.length];
 
             if (p1.y <= worldY) {
-              if (p2.y > worldY && (p2.x - p1.x) * (worldY - p1.y) - (worldX - p1.x) * (p2.y - p1.y) > 0) {
+              if (
+                p2.y > worldY &&
+                (p2.x - p1.x) * (worldY - p1.y) -
+                  (worldX - p1.x) * (p2.y - p1.y) >
+                  0
+              ) {
                 windingNumber++;
               }
             } else {
-              if (p2.y <= worldY && (p2.x - p1.x) * (worldY - p1.y) - (worldX - p1.x) * (p2.y - p1.y) < 0) {
+              if (
+                p2.y <= worldY &&
+                (p2.x - p1.x) * (worldY - p1.y) -
+                  (worldX - p1.x) * (p2.y - p1.y) <
+                  0
+              ) {
                 windingNumber--;
               }
             }
           }
-          
+
           if (windingNumber === 0) {
-            const pressure = calculateRealisticPressure(worldX, worldY, airfoilData, angleOfAttack, minX, maxX, minY, maxY);
-            
+            const pressure = calculateRealisticPressure(
+              worldX,
+              worldY,
+              airfoilData,
+              angleOfAttack,
+              minX,
+              maxX,
+              minY,
+              maxY
+            );
+
             if (lastPressure !== null && lastX !== null) {
               // Check for contour crossing
-              if ((lastPressure <= level && pressure > level) || (lastPressure > level && pressure <= level)) {
+              if (
+                (lastPressure <= level && pressure > level) ||
+                (lastPressure > level && pressure <= level)
+              ) {
                 const t = (level - lastPressure) / (pressure - lastPressure);
                 const crossingX = lastX + t * (x - lastX);
-                
+
                 ctx.moveTo(crossingX, y);
                 ctx.lineTo(crossingX + 1, y);
               }
             }
-            
+
             lastX = x;
             lastPressure = pressure;
           } else {
@@ -907,28 +1000,47 @@ const AirfoilAnalyzer: React.FC = () => {
           }
         }
       }
-      
+
       ctx.stroke();
     }
   };
 
   // Draw velocity vectors
-  const drawVelocityVectors = (ctx: CanvasRenderingContext2D, centerX: number, centerY: number, scale: number, minX: number, maxX: number, minY: number, maxY: number, canvasWidth: number, canvasHeight: number) => {
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+  const drawVelocityVectors = (
+    ctx: CanvasRenderingContext2D,
+    centerX: number,
+    centerY: number,
+    scale: number,
+    minX: number,
+    maxX: number,
+    minY: number,
+    maxY: number,
+    canvasWidth: number,
+    canvasHeight: number
+  ) => {
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.7)";
     ctx.lineWidth = 1;
-    
+
     const vectorSpacing = 60;
     const vectorScale = 25;
     const alphaRad = (angleOfAttack * Math.PI) / 180;
-    
-    for (let x = vectorSpacing; x < canvasWidth - vectorSpacing; x += vectorSpacing) {
-      for (let y = vectorSpacing; y < canvasHeight - vectorSpacing; y += vectorSpacing) {
+
+    for (
+      let x = vectorSpacing;
+      x < canvasWidth - vectorSpacing;
+      x += vectorSpacing
+    ) {
+      for (
+        let y = vectorSpacing;
+        y < canvasHeight - vectorSpacing;
+        y += vectorSpacing
+      ) {
         // Convert to world coordinates
         const worldX = (x - centerX) / scale + (minX + maxX) / 2;
         const worldY = (centerY - y) / scale + (minY + maxY) / 2;
-        
+
         if (!airfoilData) continue;
-        
+
         // Check if outside airfoil
         let windingNumber = 0;
         for (let k = 0; k < airfoilData.points.length; k++) {
@@ -936,53 +1048,71 @@ const AirfoilAnalyzer: React.FC = () => {
           const p2 = airfoilData.points[(k + 1) % airfoilData.points.length];
 
           if (p1.y <= worldY) {
-            if (p2.y > worldY && (p2.x - p1.x) * (worldY - p1.y) - (worldX - p1.x) * (p2.y - p1.y) > 0) {
+            if (
+              p2.y > worldY &&
+              (p2.x - p1.x) * (worldY - p1.y) -
+                (worldX - p1.x) * (p2.y - p1.y) >
+                0
+            ) {
               windingNumber++;
             }
           } else {
-            if (p2.y <= worldY && (p2.x - p1.x) * (worldY - p1.y) - (worldX - p1.x) * (p2.y - p1.y) < 0) {
+            if (
+              p2.y <= worldY &&
+              (p2.x - p1.x) * (worldY - p1.y) -
+                (worldX - p1.x) * (p2.y - p1.y) <
+                0
+            ) {
               windingNumber--;
             }
           }
         }
-        
+
         if (windingNumber === 0) {
           // Calculate velocity based on potential flow + angle of attack
           let vx = 1.0; // Base flow velocity
           let vy = 0.2 * Math.sin(alphaRad);
-          
+
           // Add perturbations due to airfoil
-          const distFromAirfoil = Math.min(...airfoilData.points.map(p => 
-            Math.sqrt(Math.pow(worldX - p.x, 2) + Math.pow(worldY - p.y, 2))
-          ));
-          
+          const distFromAirfoil = Math.min(
+            ...airfoilData.points.map((p) =>
+              Math.sqrt(Math.pow(worldX - p.x, 2) + Math.pow(worldY - p.y, 2))
+            )
+          );
+
           if (distFromAirfoil < 0.5) {
             const influence = Math.exp(-distFromAirfoil * 3);
             vy += 0.6 * influence * Math.sign(worldY) * Math.sin(alphaRad);
-            vx *= (1 + 0.3 * influence);
+            vx *= 1 + 0.3 * influence;
           }
-          
+
           // Normalize vector length
           const magnitude = Math.sqrt(vx * vx + vy * vy);
           vx = (vx / magnitude) * 0.8;
           vy = (vy / magnitude) * 0.8;
-          
+
           // Draw vector
           const endX = x + vx * vectorScale;
           const endY = y - vy * vectorScale;
-          
+
           ctx.beginPath();
           ctx.moveTo(x, y);
           ctx.lineTo(endX, endY);
           ctx.stroke();
-          
+
           // Arrow head
           const angle = Math.atan2(endY - y, endX - x);
           ctx.beginPath();
           ctx.moveTo(endX, endY);
-          ctx.lineTo(endX - 6 * Math.cos(angle - 0.3), endY - 6 * Math.sin(angle - 0.3));
+          ctx.lineTo(
+            endX - 6 * Math.cos(angle - 0.3),
+            endY - 6 * Math.sin(angle - 0.3)
+          );
           ctx.moveTo(endX, endY);
-          ctx.lineTo(endX - 6 * Math.cos(angle + 0.3), endY - 6 * Math.sin(angle + 0.3));
+          ctx.lineTo(
+            endX - 6 * Math.cos(angle + 0.3),
+            endY - 6 * Math.sin(angle + 0.3)
+          );
           ctx.stroke();
         }
       }
@@ -990,17 +1120,31 @@ const AirfoilAnalyzer: React.FC = () => {
   };
 
   // Draw professional labels and legend
-  const drawProfessionalLabels = (ctx: CanvasRenderingContext2D, canvasWidth: number, canvasHeight: number) => {
+  const drawProfessionalLabels = (
+    ctx: CanvasRenderingContext2D,
+    canvasWidth: number,
+    canvasHeight: number
+  ) => {
     // Main title
     ctx.fillStyle = "#ffffff";
     ctx.font = "bold 18px Arial";
     ctx.textAlign = "left";
-    ctx.fillText(`CFD Pressure Analysis - AoA: ${angleOfAttack}° - Wind: ${windSpeed} m/s`, 20, 30);
-    
+    ctx.fillText(
+      `CFD Pressure Analysis - AoA: ${angleOfAttack}° - Wind: ${windSpeed} m/s`,
+      20,
+      30
+    );
+
     if (airfoilData) {
       ctx.font = "14px Arial";
       ctx.fillText(`Airfoil: ${airfoilData.name}`, 20, 50);
-      ctx.fillText(`Reynolds Number: ${((1.225 * windSpeed * 1.0) / 1.81e-5).toExponential(2)}`, 20, 70);
+      ctx.fillText(
+        `Reynolds Number: ${((1.225 * windSpeed * 1.0) / 1.81e-5).toExponential(
+          2
+        )}`,
+        20,
+        70
+      );
     }
 
     // Professional pressure legend (ANSYS style)
@@ -1011,24 +1155,39 @@ const AirfoilAnalyzer: React.FC = () => {
 
     // Legend background
     ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
-    ctx.fillRect(legendX - 10, legendY - 5, legendWidth + 20, legendHeight + 60);
+    ctx.fillRect(
+      legendX - 10,
+      legendY - 5,
+      legendWidth + 20,
+      legendHeight + 60
+    );
 
     // Legend border
     ctx.strokeStyle = "#ffffff";
     ctx.lineWidth = 1;
-    ctx.strokeRect(legendX - 10, legendY - 5, legendWidth + 20, legendHeight + 60);
+    ctx.strokeRect(
+      legendX - 10,
+      legendY - 5,
+      legendWidth + 20,
+      legendHeight + 60
+    );
 
     // Create gradient bar
-    const gradient = ctx.createLinearGradient(legendX, 0, legendX + legendWidth, 0);
-    gradient.addColorStop(0, "rgba(0, 0, 255, 1)");      // Blue
+    const gradient = ctx.createLinearGradient(
+      legendX,
+      0,
+      legendX + legendWidth,
+      0
+    );
+    gradient.addColorStop(0, "rgba(0, 0, 255, 1)"); // Blue
     gradient.addColorStop(0.125, "rgba(0, 128, 255, 1)"); // Light blue
-    gradient.addColorStop(0.25, "rgba(0, 255, 255, 1)");  // Cyan
+    gradient.addColorStop(0.25, "rgba(0, 255, 255, 1)"); // Cyan
     gradient.addColorStop(0.375, "rgba(0, 255, 128, 1)"); // Green-cyan
-    gradient.addColorStop(0.5, "rgba(0, 255, 0, 1)");     // Green
+    gradient.addColorStop(0.5, "rgba(0, 255, 0, 1)"); // Green
     gradient.addColorStop(0.625, "rgba(128, 255, 0, 1)"); // Yellow-green
-    gradient.addColorStop(0.75, "rgba(255, 255, 0, 1)");  // Yellow
+    gradient.addColorStop(0.75, "rgba(255, 255, 0, 1)"); // Yellow
     gradient.addColorStop(0.875, "rgba(255, 128, 0, 1)"); // Orange
-    gradient.addColorStop(1, "rgba(255, 0, 0, 1)");       // Red
+    gradient.addColorStop(1, "rgba(255, 0, 0, 1)"); // Red
 
     ctx.fillStyle = gradient;
     ctx.fillRect(legendX, legendY, legendWidth, legendHeight);
@@ -1042,17 +1201,21 @@ const AirfoilAnalyzer: React.FC = () => {
     ctx.fillStyle = "#ffffff";
     ctx.font = "12px Arial";
     ctx.textAlign = "center";
-    ctx.fillText("Pressure Coefficient", legendX + legendWidth / 2, legendY - 10);
-    
+    ctx.fillText(
+      "Pressure Coefficient",
+      legendX + legendWidth / 2,
+      legendY - 10
+    );
+
     // Scale markers
     ctx.font = "10px Arial";
     const labels = ["-2.0", "-1.0", "0", "1.0", "1.5"];
     const positions = [0, 0.25, 0.57, 0.8, 1.0];
-    
+
     for (let i = 0; i < labels.length; i++) {
       const x = legendX + positions[i] * legendWidth;
       ctx.fillText(labels[i], x, legendY + legendHeight + 15);
-      
+
       // Tick marks
       ctx.beginPath();
       ctx.moveTo(x, legendY + legendHeight);
@@ -1064,16 +1227,16 @@ const AirfoilAnalyzer: React.FC = () => {
     ctx.strokeStyle = "#ffffff";
     ctx.fillStyle = "#ffffff";
     ctx.lineWidth = 2;
-    
+
     const arrowY = canvasHeight - 40;
     const arrowStartX = 20;
     const arrowLength = 40;
-    
+
     ctx.beginPath();
     ctx.moveTo(arrowStartX, arrowY);
     ctx.lineTo(arrowStartX + arrowLength, arrowY);
     ctx.stroke();
-    
+
     // Arrow head
     ctx.beginPath();
     ctx.moveTo(arrowStartX + arrowLength, arrowY);
@@ -1081,7 +1244,7 @@ const AirfoilAnalyzer: React.FC = () => {
     ctx.lineTo(arrowStartX + arrowLength - 8, arrowY + 4);
     ctx.closePath();
     ctx.fill();
-    
+
     ctx.font = "12px Arial";
     ctx.textAlign = "left";
     ctx.fillText("Flow Direction", arrowStartX + arrowLength + 10, arrowY + 4);
@@ -1381,6 +1544,182 @@ const AirfoilAnalyzer: React.FC = () => {
             <canvas ref={canvasRef} className="w-full h-auto max-h-[600px]" />
           </div>
 
+          {/* Controls */}
+          {airfoilData && (
+            <div className="my-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Angle of Attack Control */}
+                <div>
+                  <h4 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+                    <Wind className="w-5 h-5" />
+                    Angle of Attack
+                  </h4>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Current Angle: {angleOfAttack}°
+                      </label>
+                      <input
+                        type="range"
+                        min="-10"
+                        max="20"
+                        step="1"
+                        value={angleOfAttack}
+                        onChange={(e) =>
+                          handleAngleChange(parseInt(e.target.value))
+                        }
+                        className="w-full"
+                      />
+                      <div className="flex justify-between text-xs text-gray-400 mt-1">
+                        <span>-10°</span>
+                        <span>0°</span>
+                        <span>+20°</span>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => handleAngleChange(0)}
+                      className="px-3 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors text-sm flex items-center gap-2"
+                    >
+                      <RotateCcw className="w-4 h-4" />
+                      Reset to 0°
+                    </button>
+                  </div>
+                </div>
+
+                {/* Wind Speed Control */}
+                <div>
+                  <h4 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+                    <Wind className="w-5 h-5" />
+                    Wind Speed
+                  </h4>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Current Speed: {windSpeed} m/s
+                      </label>
+                      <input
+                        type="range"
+                        min="10"
+                        max="100"
+                        step="5"
+                        value={windSpeed}
+                        onChange={(e) => setWindSpeed(parseInt(e.target.value))}
+                        className="w-full"
+                      />
+                      <div className="flex justify-between text-xs text-gray-400 mt-1">
+                        <span>10 m/s</span>
+                        <span>50 m/s</span>
+                        <span>100 m/s</span>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => setWindSpeed(50)}
+                      className="px-3 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors text-sm flex items-center gap-2"
+                    >
+                      <RotateCcw className="w-4 h-4" />
+                      Reset to 50 m/s
+                    </button>
+
+                    <div className="text-xs text-gray-400">
+                      <div>
+                        Dynamic Pressure:{" "}
+                        {(0.5 * 1.225 * Math.pow(windSpeed, 2)).toFixed(0)} Pa
+                      </div>
+                      <div>Mach Number: {(windSpeed / 343).toFixed(2)}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Coefficient Calculation */}
+                <div>
+                  <h4 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+                    <TrendingUp className="w-5 h-5" />
+                    Aerodynamic Coefficients
+                  </h4>
+                  <div className="space-y-2">
+                    <button
+                      onClick={calculateCoefficientCurve}
+                      className="w-full px-3 py-2 bg-green-600 hover:bg-green-700 rounded-lg transition-colors text-sm mb-2"
+                    >
+                      Calculate Full Curve (-10° to +20°)
+                    </button>
+
+                    <button
+                      onClick={analyzeCurrentAngle}
+                      disabled={isAnalyzing || !airfoilData}
+                      className={`w-full px-3 py-2 rounded-lg transition-colors text-sm flex items-center justify-center gap-2 ${
+                        isAnalyzing
+                          ? "bg-yellow-600 cursor-not-allowed"
+                          : "bg-purple-600 hover:bg-purple-700"
+                      }`}
+                    >
+                      {isAnalyzing ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          Analyzing...
+                        </>
+                      ) : (
+                        <>
+                          <BarChart3 className="w-4 h-4" />
+                          Analyze Current Angle ({angleOfAttack}°)
+                        </>
+                      )}
+                    </button>
+
+                    {coefficients.length > 0 && (
+                      <div className="bg-gray-700 rounded-lg p-3">
+                        <div className="text-sm text-gray-300 mb-2">
+                          Current Values:
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 text-xs">
+                          <div className="text-center">
+                            <div className="font-semibold text-blue-400">
+                              Cl
+                            </div>
+                            <div className="text-white">
+                              {coefficients
+                                .find((c) => c.alpha === angleOfAttack)
+                                ?.Cl.toFixed(4) || "N/A"}
+                            </div>
+                          </div>
+                          <div className="text-center">
+                            <div className="font-semibold text-red-400">Cd</div>
+                            <div className="text-white">
+                              {coefficients
+                                .find((c) => c.alpha === angleOfAttack)
+                                ?.Cd.toFixed(4) || "N/A"}
+                            </div>
+                          </div>
+                          <div className="text-center">
+                            <div className="font-semibold text-green-400">
+                              Cm
+                            </div>
+                            <div className="text-white">
+                              {coefficients
+                                .find((c) => c.alpha === angleOfAttack)
+                                ?.Cm.toFixed(4) || "N/A"}
+                            </div>
+                          </div>
+                        </div>
+
+                        {analysisComplete && (
+                          <div className="mt-3 pt-3 border-t border-gray-600">
+                            <div className="text-sm text-green-400 font-semibold">
+                              ✓ Analysis Complete! View pressure visualization
+                              above.
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Recharts Graphs */}
           {coefficients.length > 0 && (
             <div className="mt-6 space-y-6">
@@ -1565,175 +1904,6 @@ const AirfoilAnalyzer: React.FC = () => {
               </div>
             </div>
           )}
-        </div>
-      )}
-
-      {/* Controls */}
-      {airfoilData && (
-        <div className="mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Angle of Attack Control */}
-            <div>
-              <h4 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
-                <Wind className="w-5 h-5" />
-                Angle of Attack
-              </h4>
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Current Angle: {angleOfAttack}°
-                  </label>
-                  <input
-                    type="range"
-                    min="-10"
-                    max="20"
-                    step="1"
-                    value={angleOfAttack}
-                    onChange={(e) =>
-                      handleAngleChange(parseInt(e.target.value))
-                    }
-                    className="w-full"
-                  />
-                  <div className="flex justify-between text-xs text-gray-400 mt-1">
-                    <span>-10°</span>
-                    <span>0°</span>
-                    <span>+20°</span>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => handleAngleChange(0)}
-                  className="px-3 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors text-sm flex items-center gap-2"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                  Reset to 0°
-                </button>
-              </div>
-            </div>
-
-            {/* Wind Speed Control */}
-            <div>
-              <h4 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
-                <Wind className="w-5 h-5" />
-                Wind Speed
-              </h4>
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Current Speed: {windSpeed} m/s
-                  </label>
-                  <input
-                    type="range"
-                    min="10"
-                    max="100"
-                    step="5"
-                    value={windSpeed}
-                    onChange={(e) => setWindSpeed(parseInt(e.target.value))}
-                    className="w-full"
-                  />
-                  <div className="flex justify-between text-xs text-gray-400 mt-1">
-                    <span>10 m/s</span>
-                    <span>50 m/s</span>
-                    <span>100 m/s</span>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => setWindSpeed(50)}
-                  className="px-3 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors text-sm flex items-center gap-2"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                  Reset to 50 m/s
-                </button>
-
-                <div className="text-xs text-gray-400">
-                  <div>Dynamic Pressure: {(0.5 * 1.225 * Math.pow(windSpeed, 2)).toFixed(0)} Pa</div>
-                  <div>Mach Number: {(windSpeed / 343).toFixed(2)}</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Coefficient Calculation */}
-            <div>
-              <h4 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
-                <TrendingUp className="w-5 h-5" />
-                Aerodynamic Coefficients
-              </h4>
-              <div className="space-y-2">
-                <button
-                  onClick={calculateCoefficientCurve}
-                  className="w-full px-3 py-2 bg-green-600 hover:bg-green-700 rounded-lg transition-colors text-sm mb-2"
-                >
-                  Calculate Full Curve (-10° to +20°)
-                </button>
-
-                <button
-                  onClick={analyzeCurrentAngle}
-                  disabled={isAnalyzing || !airfoilData}
-                  className={`w-full px-3 py-2 rounded-lg transition-colors text-sm flex items-center justify-center gap-2 ${
-                    isAnalyzing
-                      ? "bg-yellow-600 cursor-not-allowed"
-                      : "bg-purple-600 hover:bg-purple-700"
-                  }`}
-                >
-                  {isAnalyzing ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      Analyzing...
-                    </>
-                  ) : (
-                    <>
-                      <BarChart3 className="w-4 h-4" />
-                      Analyze Current Angle ({angleOfAttack}°)
-                    </>
-                  )}
-                </button>
-
-                {coefficients.length > 0 && (
-                  <div className="bg-gray-700 rounded-lg p-3">
-                    <div className="text-sm text-gray-300 mb-2">
-                      Current Values:
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 text-xs">
-                      <div className="text-center">
-                        <div className="font-semibold text-blue-400">Cl</div>
-                        <div className="text-white">
-                          {coefficients
-                            .find((c) => c.alpha === angleOfAttack)
-                            ?.Cl.toFixed(4) || "N/A"}
-                        </div>
-                      </div>
-                      <div className="text-center">
-                        <div className="font-semibold text-red-400">Cd</div>
-                        <div className="text-white">
-                          {coefficients
-                            .find((c) => c.alpha === angleOfAttack)
-                            ?.Cd.toFixed(4) || "N/A"}
-                        </div>
-                      </div>
-                      <div className="text-center">
-                        <div className="font-semibold text-green-400">Cm</div>
-                        <div className="text-white">
-                          {coefficients
-                            .find((c) => c.alpha === angleOfAttack)
-                            ?.Cm.toFixed(4) || "N/A"}
-                        </div>
-                      </div>
-                    </div>
-
-                    {analysisComplete && (
-                      <div className="mt-3 pt-3 border-t border-gray-600">
-                        <div className="text-sm text-green-400 font-semibold">
-                          ✓ Analysis Complete! View pressure visualization
-                          above.
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
         </div>
       )}
 
