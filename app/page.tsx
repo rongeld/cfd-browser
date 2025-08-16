@@ -17,8 +17,10 @@ import {
   Eraser,
   BookOpen,
   Beaker,
+  Plane,
 } from "lucide-react";
 import EducationalContent from "./components/EducationalContent";
+import AirfoilAnalyzer from "./components/AirfoilAnalyzer";
 import { BuyMeACoffee } from "@kanokpit.y/buy-me-a-coffee";
 
 const CFDSimulator = () => {
@@ -50,7 +52,7 @@ const CFDSimulator = () => {
 
   const [visualizationMode, setVisualizationMode] = useState("standard"); // 'standard', 'pressure', or 'smoke'
   const [quality, setQuality] = useState("medium"); // 'low', 'medium', 'high', 'ultra'
-  const [activeTab, setActiveTab] = useState("simulator"); // 'simulator' or 'learn'
+  const [activeTab, setActiveTab] = useState("simulator"); // 'simulator', 'learn', or 'airfoil'
   const [debugMode, setDebugMode] = useState(false); // Enable PDE step visualization
   const [simulationDebugData, setSimulationDebugData] = useState<any>(null);
   const [bezierPoints, setBezierPoints] = useState<
@@ -2005,6 +2007,17 @@ const CFDSimulator = () => {
                 <BookOpen className="w-4 h-4" />
                 Learn CFD
               </button>
+              <button
+                onClick={() => setActiveTab("airfoil")}
+                className={`px-6 py-2 rounded-md transition-colors flex items-center gap-2 ${
+                  activeTab === "airfoil"
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-300 hover:text-white"
+                }`}
+              >
+                <Plane className="w-4 h-4" />
+                Airfoil
+              </button>
               <BuyMeACoffee slug="rongeld" />
             </div>
           </div>
@@ -2018,6 +2031,10 @@ const CFDSimulator = () => {
               gridWidth={GRID_WIDTH}
               gridHeight={GRID_HEIGHT}
             />
+          </div>
+        ) : activeTab === "airfoil" ? (
+          <div className="max-w-6xl mx-auto">
+            <AirfoilAnalyzer />
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
