@@ -42,7 +42,7 @@ const CFDSimulator = () => {
     settingsRef.current = settings;
   }, [settings]);
 
-  const [visualizationMode, setVisualizationMode] = useState("standard"); // 'standard' or 'pressure'
+  const [visualizationMode, setVisualizationMode] = useState("standard"); // 'standard', 'pressure', or 'smoke'
   const [quality, setQuality] = useState("medium"); // 'low', 'medium', 'high', 'ultra'
   const [bezierPoints, setBezierPoints] = useState<
     { x: number; y: number }[][]
@@ -52,6 +52,7 @@ const CFDSimulator = () => {
   >([]);
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0); // 0.5x, 1x, 1.25x, 1.5x, 2x
   const [colorMode, setColorMode] = useState("speed"); // 'speed' or 'pressure'
+  const [smokeColorMode, setSmokeColorMode] = useState("grayscale"); // 'grayscale', 'thermal', 'rainbow', 'plasma'
   const [showScale, setShowScale] = useState(true);
   const [analysisPoint, setAnalysisPoint] = useState<{
     x: number;
@@ -63,6 +64,7 @@ const CFDSimulator = () => {
   const analysisPointRef = useRef<{ x: number; y: number } | null>(null);
   const analysisDataRef = useRef<any>(null);
   const colorModeRef = useRef(colorMode);
+  const smokeColorModeRef = useRef(smokeColorMode);
   const showScaleRef = useRef(showScale);
   const drawingModeRef = useRef(drawingMode);
   const currentBezierRef = useRef<{ x: number; y: number }[]>(currentBezier);
@@ -72,6 +74,7 @@ const CFDSimulator = () => {
     analysisPointRef.current = analysisPoint;
     analysisDataRef.current = analysisData;
     colorModeRef.current = colorMode;
+    smokeColorModeRef.current = smokeColorMode;
     showScaleRef.current = showScale;
     drawingModeRef.current = drawingMode;
     currentBezierRef.current = currentBezier;
@@ -79,6 +82,7 @@ const CFDSimulator = () => {
     analysisPoint,
     analysisData,
     colorMode,
+    smokeColorMode,
     showScale,
     drawingMode,
     currentBezier,
@@ -110,6 +114,7 @@ const CFDSimulator = () => {
     pressure: number[];
     obstacles: boolean[];
     particles: { x: number; y: number; vx: number; vy: number; life: number }[];
+    smokeField: number[]; // Add smoke density field
     currentGridWidth: number;
     currentGridHeight: number;
   }
@@ -128,6 +133,7 @@ const CFDSimulator = () => {
       pressure: new Array(gridSize).fill(0),
       obstacles: new Array(gridSize).fill(false),
       particles: [],
+      smokeField: new Array(gridSize).fill(0), // Initialize smoke field
       currentGridWidth: GRID_WIDTH,
       currentGridHeight: GRID_HEIGHT,
     };
@@ -352,6 +358,72 @@ const CFDSimulator = () => {
     }
   };
 
+  // Smoke simulation functions
+  const addSmoke = () => {
+    const { smokeField, obstacles } = simulationState.current!;
+
+    // Add smoke at inlet (left side)
+    for (let j = 0; j < GRID_HEIGHT; j++) {
+      for (let i = 0; i < Math.min(3, GRID_WIDTH); i++) {
+        const idx = j * GRID_WIDTH + i;
+        if (!obstacles[idx]) {
+          smokeField[idx] = Math.min(1.0, smokeField[idx] + 0.8);
+        }
+      }
+    }
+  };
+
+  const advectSmoke = () => {
+    const { smokeField, velocityX, velocityY, obstacles } =
+      simulationState.current!;
+    const newSmoke = [...smokeField];
+    const dt = 0.016;
+
+    for (let i = 1; i < GRID_WIDTH - 1; i++) {
+      for (let j = 1; j < GRID_HEIGHT - 1; j++) {
+        const idx = j * GRID_WIDTH + i;
+        if (!obstacles[idx]) {
+          // Trace particle backwards
+          const vx = velocityX[idx];
+          const vy = velocityY[idx];
+          const x = i - dt * vx;
+          const y = j - dt * vy;
+
+          // Interpolate smoke density
+          newSmoke[idx] = interpolateVelocity(x, y, smokeField);
+        }
+      }
+    }
+
+    simulationState.current!.smokeField = newSmoke;
+  };
+
+  const diffuseSmoke = () => {
+    const { smokeField, obstacles } = simulationState.current!;
+    const diffusionRate = 0.001; // Small diffusion rate for smoke
+    const newSmoke = [...smokeField];
+
+    for (let i = 1; i < GRID_WIDTH - 1; i++) {
+      for (let j = 1; j < GRID_HEIGHT - 1; j++) {
+        const idx = j * GRID_WIDTH + i;
+        if (!obstacles[idx]) {
+          const neighbors =
+            smokeField[idx - 1] +
+            smokeField[idx + 1] +
+            smokeField[idx - GRID_WIDTH] +
+            smokeField[idx + GRID_WIDTH];
+          newSmoke[idx] =
+            smokeField[idx] + diffusionRate * (neighbors - 4 * smokeField[idx]);
+
+          // Natural dissipation
+          newSmoke[idx] *= 0.998;
+        }
+      }
+    }
+
+    simulationState.current!.smokeField = newSmoke;
+  };
+
   // Render function
   const render = useCallback(() => {
     const canvas = canvasRef.current;
@@ -363,7 +435,12 @@ const CFDSimulator = () => {
     const height = canvas.height;
 
     // Clear canvas
-    ctx.fillStyle = visualizationMode === "pressure" ? "#000011" : "#0a0a0a";
+    ctx.fillStyle =
+      visualizationMode === "pressure"
+        ? "#000011"
+        : visualizationMode === "smoke"
+        ? "#1a1a1a"
+        : "#0a0a0a";
     ctx.fillRect(0, 0, width, height);
 
     const {
@@ -381,7 +458,56 @@ const CFDSimulator = () => {
     const CURRENT_GRID_HEIGHT = currentGridHeight;
     const CURRENT_CELL_SIZE = CELL_SIZE;
 
-    if (visualizationMode === "pressure") {
+    if (visualizationMode === "smoke") {
+      // Smoke visualization mode
+      const { smokeField } = simulationState.current!;
+
+      // Create gradient for smooth smoke visualization
+      for (let i = 0; i < GRID_WIDTH; i++) {
+        for (let j = 0; j < GRID_HEIGHT; j++) {
+          const idx = j * GRID_WIDTH + i;
+          if (!obstacles[idx]) {
+            const density = smokeField[idx];
+
+            if (density > 0.01) {
+              // Only draw visible smoke
+              ctx.fillStyle = getSmokeColor(density, smokeColorModeRef.current);
+              ctx.fillRect(i * CELL_SIZE, j * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+            }
+          }
+        }
+      }
+
+      // Add some velocity vectors for smoke mode (minimal)
+      if (settingsRef.current.showVelocityField) {
+        for (let i = 0; i < GRID_WIDTH; i += 6) {
+          for (let j = 0; j < GRID_HEIGHT; j += 6) {
+            const idx = j * GRID_WIDTH + i;
+            if (!obstacles[idx]) {
+              const vx = velocityX[idx];
+              const vy = velocityY[idx];
+              const speed = Math.sqrt(vx * vx + vy * vy);
+
+              if (speed > 0.3) {
+                const x = i * CELL_SIZE;
+                const y = j * CELL_SIZE;
+                const length = Math.min(
+                  speed * 1.2 * settingsRef.current.arrowSize,
+                  CELL_SIZE * 0.3
+                );
+
+                ctx.strokeStyle = `rgba(255, 255, 255, 0.4)`;
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                ctx.lineTo(x + vx * length, y + vy * length);
+                ctx.stroke();
+              }
+            }
+          }
+        }
+      }
+    } else if (visualizationMode === "pressure") {
       // Enhanced pressure visualization mode
 
       // Find pressure range for better scaling
@@ -661,12 +787,14 @@ const CFDSimulator = () => {
       }
     }
 
-    // Draw obstacles (same for both modes)
+    // Draw obstacles (same for all modes)
     ctx.fillStyle =
       drawingModeRef.current === "draw"
         ? "#ff6b6b"
         : visualizationMode === "pressure"
         ? "#222"
+        : visualizationMode === "smoke"
+        ? "#333"
         : "#444";
     for (let i = 0; i < GRID_WIDTH; i++) {
       for (let j = 0; j < GRID_HEIGHT; j++) {
@@ -714,7 +842,10 @@ const CFDSimulator = () => {
     }
 
     // Draw color scale/legend
-    if (showScaleRef.current && settingsRef.current.showParticles) {
+    if (
+      showScaleRef.current &&
+      (settingsRef.current.showParticles || visualizationMode === "smoke")
+    ) {
       const scaleWidth = 200;
       const scaleHeight = 20;
       const scaleX = width - scaleWidth - 20;
@@ -723,8 +854,19 @@ const CFDSimulator = () => {
       // Calculate current min/max values
       let minValue = Infinity;
       let maxValue = -Infinity;
+      let scaleLabel = "";
 
-      if (colorModeRef.current === "speed") {
+      if (visualizationMode === "smoke") {
+        // For smoke mode, show density range
+        for (let i = 0; i < GRID_WIDTH * GRID_HEIGHT; i++) {
+          if (!obstacles[i]) {
+            const density = simulationState.current!.smokeField[i];
+            minValue = Math.min(minValue, density);
+            maxValue = Math.max(maxValue, density);
+          }
+        }
+        scaleLabel = "Smoke Density";
+      } else if (colorModeRef.current === "speed") {
         particles.forEach((particle: any) => {
           const speed = Math.sqrt(
             particle.vx * particle.vx + particle.vy * particle.vy
@@ -732,6 +874,7 @@ const CFDSimulator = () => {
           minValue = Math.min(minValue, speed);
           maxValue = Math.max(maxValue, speed);
         });
+        scaleLabel = "Speed";
       } else {
         for (let i = 0; i < GRID_WIDTH * GRID_HEIGHT; i++) {
           if (!obstacles[i]) {
@@ -739,6 +882,7 @@ const CFDSimulator = () => {
             maxValue = Math.max(maxValue, pressure[i]);
           }
         }
+        scaleLabel = "Pressure";
       }
 
       // Note: minValue and maxValue are used directly below for scale labels
@@ -755,7 +899,36 @@ const CFDSimulator = () => {
         0
       );
 
-      if (colorModeRef.current === "speed") {
+      if (visualizationMode === "smoke") {
+        // Create gradient based on smoke color scheme
+        switch (smokeColorModeRef.current) {
+          case "grayscale":
+            gradient.addColorStop(0, "rgb(255, 255, 255)"); // White (low density)
+            gradient.addColorStop(1, "rgb(50, 50, 50)"); // Dark gray (high density)
+            break;
+          case "thermal":
+            gradient.addColorStop(0, "rgb(0, 0, 255)"); // Blue
+            gradient.addColorStop(0.25, "rgb(0, 255, 255)"); // Cyan
+            gradient.addColorStop(0.5, "rgb(0, 255, 0)"); // Green
+            gradient.addColorStop(0.75, "rgb(255, 255, 0)"); // Yellow
+            gradient.addColorStop(1, "rgb(255, 0, 0)"); // Red
+            break;
+          case "rainbow":
+            gradient.addColorStop(0, "hsl(270, 80%, 60%)"); // Purple
+            gradient.addColorStop(0.2, "hsl(240, 80%, 60%)"); // Blue
+            gradient.addColorStop(0.4, "hsl(180, 80%, 60%)"); // Cyan
+            gradient.addColorStop(0.6, "hsl(120, 80%, 60%)"); // Green
+            gradient.addColorStop(0.8, "hsl(60, 80%, 60%)"); // Yellow
+            gradient.addColorStop(1, "hsl(0, 80%, 60%)"); // Red
+            break;
+          case "plasma":
+            gradient.addColorStop(0, "rgb(13, 8, 135)"); // Dark purple
+            gradient.addColorStop(0.33, "rgb(120, 28, 142)"); // Purple
+            gradient.addColorStop(0.66, "rgb(220, 50, 126)"); // Pink
+            gradient.addColorStop(1, "rgb(253, 231, 37)"); // Yellow
+            break;
+        }
+      } else if (colorModeRef.current === "speed") {
         gradient.addColorStop(0, "hsl(240, 80%, 60%)"); // Blue (low speed)
         gradient.addColorStop(0.5, "hsl(120, 80%, 60%)"); // Green (medium speed)
         gradient.addColorStop(1, "hsl(60, 80%, 60%)"); // Yellow/Red (high speed)
@@ -782,7 +955,7 @@ const CFDSimulator = () => {
 
       ctx.textAlign = "center";
       ctx.fillText(
-        colorModeRef.current === "speed" ? "Speed" : "Pressure",
+        scaleLabel,
         scaleX + scaleWidth / 2,
         scaleY + scaleHeight + 12
       );
@@ -794,7 +967,12 @@ const CFDSimulator = () => {
       // Add units
       ctx.font = "9px Arial";
       ctx.textAlign = "center";
-      const units = colorModeRef.current === "speed" ? "units/s" : "Pa";
+      const units =
+        visualizationMode === "smoke"
+          ? "density"
+          : colorModeRef.current === "speed"
+          ? "units/s"
+          : "Pa";
       ctx.fillText(units, scaleX + scaleWidth / 2, scaleY + scaleHeight + 25);
     }
 
@@ -930,6 +1108,77 @@ const CFDSimulator = () => {
     }
   };
 
+  // Smoke color schemes (ANSYS-style)
+  const getSmokeColor = (density: number, colorScheme: string) => {
+    const normalized = Math.min(Math.max(density, 0), 1);
+
+    switch (colorScheme) {
+      case "grayscale":
+        const grayValue = Math.floor(255 * (1 - normalized * 0.8));
+        return `rgba(${grayValue}, ${grayValue}, ${grayValue}, ${
+          0.3 + normalized * 0.7
+        })`;
+
+      case "thermal":
+        // Blue -> Cyan -> Green -> Yellow -> Red (like thermal imaging)
+        if (normalized < 0.25) {
+          const t = normalized / 0.25;
+          const r = 0;
+          const g = Math.floor(t * 255);
+          const b = 255;
+          return `rgba(${r}, ${g}, ${b}, ${0.4 + normalized * 0.6})`;
+        } else if (normalized < 0.5) {
+          const t = (normalized - 0.25) / 0.25;
+          const r = 0;
+          const g = 255;
+          const b = Math.floor(255 * (1 - t));
+          return `rgba(${r}, ${g}, ${b}, ${0.4 + normalized * 0.6})`;
+        } else if (normalized < 0.75) {
+          const t = (normalized - 0.5) / 0.25;
+          const r = Math.floor(t * 255);
+          const g = 255;
+          const b = 0;
+          return `rgba(${r}, ${g}, ${b}, ${0.4 + normalized * 0.6})`;
+        } else {
+          const t = (normalized - 0.75) / 0.25;
+          const r = 255;
+          const g = Math.floor(255 * (1 - t));
+          const b = 0;
+          return `rgba(${r}, ${g}, ${b}, ${0.4 + normalized * 0.6})`;
+        }
+
+      case "rainbow":
+        // Full spectrum rainbow
+        const hue = (1 - normalized) * 270; // Purple to Red
+        return `hsla(${hue}, 80%, 60%, ${0.4 + normalized * 0.6})`;
+
+      case "plasma":
+        // Plasma colormap (Purple -> Pink -> Yellow)
+        if (normalized < 0.33) {
+          const t = normalized / 0.33;
+          const r = Math.floor(13 + t * (120 - 13));
+          const g = Math.floor(8 + t * (28 - 8));
+          const b = Math.floor(135 + t * (142 - 135));
+          return `rgba(${r}, ${g}, ${b}, ${0.4 + normalized * 0.6})`;
+        } else if (normalized < 0.66) {
+          const t = (normalized - 0.33) / 0.33;
+          const r = Math.floor(120 + t * (220 - 120));
+          const g = Math.floor(28 + t * (50 - 28));
+          const b = Math.floor(142 + t * (126 - 142));
+          return `rgba(${r}, ${g}, ${b}, ${0.4 + normalized * 0.6})`;
+        } else {
+          const t = (normalized - 0.66) / 0.34;
+          const r = Math.floor(220 + t * (253 - 220));
+          const g = Math.floor(50 + t * (231 - 50));
+          const b = Math.floor(126 + t * (37 - 126));
+          return `rgba(${r}, ${g}, ${b}, ${0.4 + normalized * 0.6})`;
+        }
+
+      default:
+        return getSmokeColor(density, "grayscale");
+    }
+  };
+
   // Check if click is on close button
   const isClickOnCloseButton = (clickX: number, clickY: number) => {
     if (!analysisPointRef.current || !analysisDataRef.current) return false;
@@ -1018,22 +1267,33 @@ const CFDSimulator = () => {
     if (currentCount < targetCount) {
       // Add particles distributed across the canvas proportionally
       const particlesToAdd = targetCount - currentCount;
-      
+
       // If we have existing particles, distribute new ones proportionally
       if (currentCount > 0) {
         for (let i = 0; i < particlesToAdd; i++) {
           // Choose a random existing particle to use as a reference
-          const refParticle = particles[Math.floor(Math.random() * currentCount)];
-          
+          const refParticle =
+            particles[Math.floor(Math.random() * currentCount)];
+
           // Add some randomness around the reference particle's position
           const spreadX = CELL_SIZE * 10; // Horizontal spread
-          const spreadY = CELL_SIZE * 5;  // Vertical spread
-          
+          const spreadY = CELL_SIZE * 5; // Vertical spread
+
           particles.push({
-            x: Math.max(0, Math.min(GRID_WIDTH * CELL_SIZE, 
-                refParticle.x + (Math.random() - 0.5) * spreadX)),
-            y: Math.max(0, Math.min(GRID_HEIGHT * CELL_SIZE, 
-                refParticle.y + (Math.random() - 0.5) * spreadY)),
+            x: Math.max(
+              0,
+              Math.min(
+                GRID_WIDTH * CELL_SIZE,
+                refParticle.x + (Math.random() - 0.5) * spreadX
+              )
+            ),
+            y: Math.max(
+              0,
+              Math.min(
+                GRID_HEIGHT * CELL_SIZE,
+                refParticle.y + (Math.random() - 0.5) * spreadY
+              )
+            ),
             vx: refParticle.vx + (Math.random() - 0.5) * 0.5, // Small velocity variation
             vy: refParticle.vy + (Math.random() - 0.5) * 0.5,
             life: Math.random() * 0.5 + 0.5, // Random life between 0.5-1.0
@@ -1219,10 +1479,11 @@ const CFDSimulator = () => {
           const idx = j * GRID_WIDTH + i;
           obstacles[idx] = !isErasing;
 
-          // Clear velocity at obstacle locations
+          // Clear velocity and smoke at obstacle locations
           if (!isErasing) {
             simulationState.current!.velocityX[idx] = 0;
             simulationState.current!.velocityY[idx] = 0;
+            simulationState.current!.smokeField[idx] = 0;
           }
         }
       }
@@ -1263,6 +1524,7 @@ const CFDSimulator = () => {
             obstacles[idx] = true;
             simulationState.current!.velocityX[idx] = 0;
             simulationState.current!.velocityY[idx] = 0;
+            simulationState.current!.smokeField[idx] = 0;
           }
         }
       }
@@ -1372,6 +1634,14 @@ const CFDSimulator = () => {
     projectVelocity();
     advectVelocity();
     applyBoundaryConditions();
+
+    // Add smoke simulation
+    if (visualizationMode === "smoke") {
+      addSmoke();
+      advectSmoke();
+      diffuseSmoke();
+    }
+
     updateParticles();
     updateAnalysisData(); // Update analysis data in real-time
   }, [
@@ -1381,7 +1651,8 @@ const CFDSimulator = () => {
     projectVelocity,
     updateParticles,
     updateAnalysisData,
-  ]); // Remove settings dependency - functions will use current settings via closure
+    visualizationMode,
+  ]); // Add visualizationMode dependency
 
   const runSimulationSteps = useCallback(() => {
     const steps = Math.max(1, Math.floor(playbackSpeed));
@@ -1435,14 +1706,29 @@ const CFDSimulator = () => {
     if (!isRunning) {
       render();
     }
-  }, [drawingMode, visualizationMode, settings, isRunning, render]);
+  }, [
+    drawingMode,
+    visualizationMode,
+    smokeColorMode,
+    settings,
+    isRunning,
+    render,
+  ]);
 
   // Separate useEffect for analysis data to avoid render function recreation
   useEffect(() => {
     if (!isRunning) {
       render();
     }
-  }, [analysisPoint, analysisData, colorMode, showScale, isRunning, render]);
+  }, [
+    analysisPoint,
+    analysisData,
+    colorMode,
+    smokeColorMode,
+    showScale,
+    isRunning,
+    render,
+  ]);
 
   // Start/stop animation
   useEffect(() => {
@@ -1485,6 +1771,7 @@ const CFDSimulator = () => {
       simulationState.current!.velocityX.fill(0);
       simulationState.current!.velocityY.fill(0);
       simulationState.current!.pressure.fill(0);
+      simulationState.current!.smokeField.fill(0);
       render();
     }, 100);
   };
@@ -1525,7 +1812,17 @@ const CFDSimulator = () => {
                           : "text-gray-300 hover:text-white"
                       }`}
                     >
-                      Standard
+                      Particles
+                    </button>
+                    <button
+                      onClick={() => setVisualizationMode("smoke")}
+                      className={`px-3 py-1 rounded text-sm transition-colors ${
+                        visualizationMode === "smoke"
+                          ? "bg-gray-600 text-white"
+                          : "text-gray-300 hover:text-white"
+                      }`}
+                    >
+                      Smoke
                     </button>
                     <button
                       onClick={() => setVisualizationMode("pressure")}
@@ -1538,6 +1835,57 @@ const CFDSimulator = () => {
                       Pressure
                     </button>
                   </div>
+
+                  {/* Smoke Color Scheme Controls */}
+                  {visualizationMode === "smoke" && (
+                    <div className="mt-3 pt-3 border-t border-gray-600">
+                      <div className="text-sm font-medium mb-2">
+                        Smoke Color Scheme
+                      </div>
+                      <div className="grid grid-cols-2 gap-1 bg-gray-700 rounded-lg p-1">
+                        <button
+                          onClick={() => setSmokeColorMode("grayscale")}
+                          className={`px-2 py-1 rounded text-xs transition-colors ${
+                            smokeColorMode === "grayscale"
+                              ? "bg-gray-500 text-white"
+                              : "text-gray-300 hover:text-white"
+                          }`}
+                        >
+                          Grayscale
+                        </button>
+                        <button
+                          onClick={() => setSmokeColorMode("thermal")}
+                          className={`px-2 py-1 rounded text-xs transition-colors ${
+                            smokeColorMode === "thermal"
+                              ? "bg-orange-600 text-white"
+                              : "text-gray-300 hover:text-white"
+                          }`}
+                        >
+                          Thermal
+                        </button>
+                        <button
+                          onClick={() => setSmokeColorMode("rainbow")}
+                          className={`px-2 py-1 rounded text-xs transition-colors ${
+                            smokeColorMode === "rainbow"
+                              ? "bg-purple-600 text-white"
+                              : "text-gray-300 hover:text-white"
+                          }`}
+                        >
+                          Rainbow
+                        </button>
+                        <button
+                          onClick={() => setSmokeColorMode("plasma")}
+                          className={`px-2 py-1 rounded text-xs transition-colors ${
+                            smokeColorMode === "plasma"
+                              ? "bg-pink-600 text-white"
+                              : "text-gray-300 hover:text-white"
+                          }`}
+                        >
+                          Plasma
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   <button
                     onClick={() =>
@@ -1877,8 +2225,8 @@ const CFDSimulator = () => {
               <h3 className="text-lg font-semibold mb-3">How to Use</h3>
               <div className="text-sm text-gray-400 space-y-2">
                 <p>
-                  <strong>� VDisualization:</strong> Switch between Standard and
-                  Pressure modes
+                  <strong>🎨 Visualization:</strong> Switch between Particles,
+                  Smoke, and Pressure modes
                 </p>
                 <p>
                   <strong>🖌️ Draw Mode:</strong> Click and drag to draw
@@ -1942,6 +2290,29 @@ const CFDSimulator = () => {
                     <div className="flex items-center gap-2">
                       <div className="w-3 h-3 bg-yellow-500 rounded"></div>
                       <span>Fast (Yellow/Red)</span>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <strong className="text-gray-400">
+                    Smoke Color Schemes:
+                  </strong>
+                  <div className="ml-2 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 bg-gray-500 rounded"></div>
+                      <span>Grayscale - Classic smoke</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 bg-orange-500 rounded"></div>
+                      <span>Thermal - Heat map style</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 bg-purple-500 rounded"></div>
+                      <span>Rainbow - Full spectrum</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 bg-pink-500 rounded"></div>
+                      <span>Plasma - ANSYS style</span>
                     </div>
                   </div>
                 </div>
