@@ -19,6 +19,7 @@ import {
   Beaker,
 } from "lucide-react";
 import EducationalContent from "./components/EducationalContent";
+import { BuyMeACoffee } from "@kanokpit.y/buy-me-a-coffee";
 
 const CFDSimulator = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -2004,6 +2005,7 @@ const CFDSimulator = () => {
                 <BookOpen className="w-4 h-4" />
                 Learn CFD
               </button>
+              <BuyMeACoffee slug="rongeld" />
             </div>
           </div>
         </div>

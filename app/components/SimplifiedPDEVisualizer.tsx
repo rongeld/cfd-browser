@@ -25,7 +25,10 @@ const SimplifiedPDEVisualizer = ({
 }: SimplifiedPDEVisualizerProps) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
-  const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);
+  const [selectedCell, setSelectedCell] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
   const [showCalculations, setShowCalculations] = useState(false);
   const [speed, setSpeed] = useState(2000); // Animation speed in ms
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -92,13 +95,13 @@ const SimplifiedPDEVisualizer = ({
     const rect = canvas.getBoundingClientRect();
     const clickX = event.clientX - rect.left;
     const clickY = event.clientY - rect.top;
-    
+
     const cellWidth = canvas.width / gridWidth;
     const cellHeight = canvas.height / gridHeight;
-    
+
     const gridX = Math.floor(clickX / cellWidth);
     const gridY = Math.floor(clickY / cellHeight);
-    
+
     if (gridX >= 0 && gridX < gridWidth && gridY >= 0 && gridY < gridHeight) {
       setSelectedCell({ x: gridX, y: gridY });
       setShowCalculations(true);
@@ -108,43 +111,47 @@ const SimplifiedPDEVisualizer = ({
   // Calculate actual PDE values for a specific cell
   const calculateCellPDE = (x: number, y: number) => {
     const idx = y * gridWidth + x;
-    
+
     // Divergence calculation: ∇·v = ∂vx/∂x + ∂vy/∂y
     const leftIdx = x > 0 ? idx - 1 : idx;
     const rightIdx = x < gridWidth - 1 ? idx + 1 : idx;
     const topIdx = y > 0 ? idx - gridWidth : idx;
     const bottomIdx = y < gridHeight - 1 ? idx + gridWidth : idx;
-    
+
     const dvx_dx = (grid.velocityX[rightIdx] - grid.velocityX[leftIdx]) / 2;
     const dvy_dy = (grid.velocityY[bottomIdx] - grid.velocityY[topIdx]) / 2;
     const divergence = dvx_dx + dvy_dy;
-    
+
     // Pressure gradients: ∇p = (∂p/∂x, ∂p/∂y)
     const dpx_dx = (grid.pressure[rightIdx] - grid.pressure[leftIdx]) / 2;
     const dpy_dy = (grid.pressure[bottomIdx] - grid.pressure[topIdx]) / 2;
-    
+
     // Flow in/out calculation
     const flowInX = Math.max(0, grid.velocityX[leftIdx]);
     const flowOutX = Math.max(0, grid.velocityX[idx]);
     const flowInY = Math.max(0, grid.velocityY[topIdx]);
     const flowOutY = Math.max(0, grid.velocityY[idx]);
-    
+
     const totalFlowIn = flowInX + flowInY;
     const totalFlowOut = flowOutX + flowOutY;
-    
+
     return {
       position: { x, y },
       velocity: { x: grid.velocityX[idx], y: grid.velocityY[idx] },
       pressure: grid.pressure[idx],
       divergence,
       pressureGrad: { x: dpx_dx, y: dpy_dy },
-      flow: { in: totalFlowIn, out: totalFlowOut, net: totalFlowIn - totalFlowOut },
+      flow: {
+        in: totalFlowIn,
+        out: totalFlowOut,
+        net: totalFlowIn - totalFlowOut,
+      },
       neighbors: {
         left: grid.velocityX[leftIdx],
         right: grid.velocityX[rightIdx],
         top: grid.velocityY[topIdx],
-        bottom: grid.velocityY[bottomIdx]
-      }
+        bottom: grid.velocityY[bottomIdx],
+      },
     };
   };
 
@@ -271,12 +278,12 @@ const SimplifiedPDEVisualizer = ({
                 newGrid.velocityX[idx - 1] + newGrid.velocityY[idx - gridWidth];
               const flowOut = newGrid.velocityX[idx] + newGrid.velocityY[idx];
               const divergence = flowOut - flowIn;
-              
+
               // Store divergence and flow calculations for visualization
               newGrid.divergence[idx] = divergence;
               newGrid.flowIn[idx] = flowIn;
               newGrid.flowOut[idx] = flowOut;
-              
+
               // Store divergence in pressure field for visualization
               newGrid.pressure[idx] = divergence;
             }
@@ -304,11 +311,11 @@ const SimplifiedPDEVisualizer = ({
               const pressureGradY =
                 newGrid.pressure[idx + gridWidth] -
                 newGrid.pressure[idx - gridWidth];
-              
-              // Store pressure gradients for visualization  
+
+              // Store pressure gradients for visualization
               newGrid.pressureGradX[idx] = pressureGradX;
               newGrid.pressureGradY[idx] = pressureGradY;
-              
+
               // Apply pressure gradient to velocity
               newGrid.velocityX[idx] -= pressureGradX * 0.1;
               newGrid.velocityY[idx] -= pressureGradY * 0.1;
@@ -485,13 +492,13 @@ const SimplifiedPDEVisualizer = ({
       const cellHeight = canvas.height / gridHeight;
       const x = selectedCell.x * cellWidth;
       const y = selectedCell.y * cellHeight;
-      
+
       ctx.strokeStyle = "#ff0000";
       ctx.lineWidth = 3;
       ctx.setLineDash([5, 5]);
       ctx.strokeRect(x, y, cellWidth, cellHeight);
       ctx.setLineDash([]);
-      
+
       // Add a small label
       ctx.fillStyle = "#ff0000";
       ctx.font = "bold 12px Arial";
@@ -507,7 +514,11 @@ const SimplifiedPDEVisualizer = ({
     if (!selectedCell) {
       ctx.fillStyle = "#666";
       ctx.font = "12px Arial";
-      ctx.fillText("Click on any cell to see detailed PDE calculations", 10, 20);
+      ctx.fillText(
+        "Click on any cell to see detailed PDE calculations",
+        10,
+        20
+      );
     }
   };
 
@@ -699,10 +710,11 @@ const SimplifiedPDEVisualizer = ({
             <div className="flex items-center gap-3">
               <div className="text-2xl">🔬</div>
               <h4 className="text-lg font-semibold">
-                Cell ({selectedCell.x}, {selectedCell.y}) - Detailed PDE Calculations
+                Cell ({selectedCell.x}, {selectedCell.y}) - Detailed PDE
+                Calculations
               </h4>
             </div>
-            <button 
+            <button
               onClick={() => setShowCalculations(false)}
               className="text-gray-500 hover:text-gray-700 text-xl"
             >
@@ -716,34 +728,60 @@ const SimplifiedPDEVisualizer = ({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Current State */}
                 <div className="space-y-3">
-                  <h5 className="font-semibold text-blue-700 dark:text-blue-300">📍 Current State</h5>
+                  <h5 className="font-semibold text-blue-700 dark:text-blue-300">
+                    📍 Current State
+                  </h5>
                   <div className="bg-white dark:bg-gray-800 p-3 rounded">
                     <div className="text-sm space-y-1">
-                      <div><strong>Position:</strong> Grid cell ({calc.position.x}, {calc.position.y})</div>
-                      <div><strong>Velocity X:</strong> {calc.velocity.x.toFixed(3)} m/s</div>
-                      <div><strong>Velocity Y:</strong> {calc.velocity.y.toFixed(3)} m/s</div>
-                      <div><strong>Speed:</strong> {Math.sqrt(calc.velocity.x**2 + calc.velocity.y**2).toFixed(3)} m/s</div>
-                      <div><strong>Pressure:</strong> {calc.pressure.toFixed(3)} Pa</div>
+                      <div>
+                        <strong>Position:</strong> Grid cell ({calc.position.x},{" "}
+                        {calc.position.y})
+                      </div>
+                      <div>
+                        <strong>Velocity X:</strong>{" "}
+                        {calc.velocity.x.toFixed(3)} m/s
+                      </div>
+                      <div>
+                        <strong>Velocity Y:</strong>{" "}
+                        {calc.velocity.y.toFixed(3)} m/s
+                      </div>
+                      <div>
+                        <strong>Speed:</strong>{" "}
+                        {Math.sqrt(
+                          calc.velocity.x ** 2 + calc.velocity.y ** 2
+                        ).toFixed(3)}{" "}
+                        m/s
+                      </div>
+                      <div>
+                        <strong>Pressure:</strong> {calc.pressure.toFixed(3)} Pa
+                      </div>
                     </div>
                   </div>
                 </div>
 
                 {/* PDE Calculations */}
                 <div className="space-y-3">
-                  <h5 className="font-semibold text-purple-700 dark:text-purple-300">🧮 PDE Math</h5>
+                  <h5 className="font-semibold text-purple-700 dark:text-purple-300">
+                    🧮 PDE Math
+                  </h5>
                   <div className="bg-white dark:bg-gray-800 p-3 rounded">
                     <div className="text-sm space-y-2">
                       <div>
-                        <strong>Divergence (∇·v):</strong> {calc.divergence.toFixed(4)}
+                        <strong>Divergence (∇·v):</strong>{" "}
+                        {calc.divergence.toFixed(4)}
                         <div className="text-xs text-gray-600 ml-4">
-                          = ∂vₓ/∂x + ∂vᵧ/∂y<br/>
-                          = {(calc.neighbors.right - calc.neighbors.left)/2} + {(calc.neighbors.bottom - calc.neighbors.top)/2}
+                          = ∂vₓ/∂x + ∂vᵧ/∂y
+                          <br />={" "}
+                          {(calc.neighbors.right - calc.neighbors.left) /
+                            2} +{" "}
+                          {(calc.neighbors.bottom - calc.neighbors.top) / 2}
                         </div>
                       </div>
                       <div>
-                        <strong>Pressure Gradient:</strong> 
+                        <strong>Pressure Gradient:</strong>
                         <div className="text-xs text-gray-600 ml-4">
-                          ∇p = ({calc.pressureGrad.x.toFixed(4)}, {calc.pressureGrad.y.toFixed(4)})
+                          ∇p = ({calc.pressureGrad.x.toFixed(4)},{" "}
+                          {calc.pressureGrad.y.toFixed(4)})
                         </div>
                       </div>
                     </div>
@@ -752,17 +790,26 @@ const SimplifiedPDEVisualizer = ({
 
                 {/* Flow Analysis */}
                 <div className="space-y-3">
-                  <h5 className="font-semibold text-green-700 dark:text-green-300">🌊 Flow Analysis</h5>
+                  <h5 className="font-semibold text-green-700 dark:text-green-300">
+                    🌊 Flow Analysis
+                  </h5>
                   <div className="bg-white dark:bg-gray-800 p-3 rounded">
                     <div className="text-sm space-y-1">
-                      <div><strong>Flow In:</strong> {calc.flow.in.toFixed(4)} m³/s</div>
-                      <div><strong>Flow Out:</strong> {calc.flow.out.toFixed(4)} m³/s</div>
-                      <div><strong>Net Flow:</strong> {calc.flow.net.toFixed(4)} m³/s</div>
+                      <div>
+                        <strong>Flow In:</strong> {calc.flow.in.toFixed(4)} m³/s
+                      </div>
+                      <div>
+                        <strong>Flow Out:</strong> {calc.flow.out.toFixed(4)}{" "}
+                        m³/s
+                      </div>
+                      <div>
+                        <strong>Net Flow:</strong> {calc.flow.net.toFixed(4)}{" "}
+                        m³/s
+                      </div>
                       <div className="text-xs text-gray-600 mt-2">
-                        {Math.abs(calc.flow.net) < 0.001 ? 
-                          "✅ Balanced flow (conservation satisfied)" : 
-                          "⚠️ Imbalanced flow (pressure correction needed)"
-                        }
+                        {Math.abs(calc.flow.net) < 0.001
+                          ? "✅ Balanced flow (conservation satisfied)"
+                          : "⚠️ Imbalanced flow (pressure correction needed)"}
                       </div>
                     </div>
                   </div>
@@ -770,20 +817,30 @@ const SimplifiedPDEVisualizer = ({
 
                 {/* Neighbor Values */}
                 <div className="space-y-3">
-                  <h5 className="font-semibold text-orange-700 dark:text-orange-300">🔄 Neighbor Interaction</h5>
+                  <h5 className="font-semibold text-orange-700 dark:text-orange-300">
+                    🔄 Neighbor Interaction
+                  </h5>
                   <div className="bg-white dark:bg-gray-800 p-3 rounded">
                     <div className="text-sm">
                       <div className="grid grid-cols-3 gap-1 text-center mb-2">
                         <div></div>
-                        <div className="bg-blue-100 p-1 rounded">↑ {calc.neighbors.top.toFixed(2)}</div>
+                        <div className="bg-blue-100 p-1 rounded">
+                          ↑ {calc.neighbors.top.toFixed(2)}
+                        </div>
                         <div></div>
-                        <div className="bg-blue-100 p-1 rounded">← {calc.neighbors.left.toFixed(2)}</div>
+                        <div className="bg-blue-100 p-1 rounded">
+                          ← {calc.neighbors.left.toFixed(2)}
+                        </div>
                         <div className="bg-yellow-200 p-1 rounded font-bold">
                           ({selectedCell.x},{selectedCell.y})
                         </div>
-                        <div className="bg-blue-100 p-1 rounded">→ {calc.neighbors.right.toFixed(2)}</div>
+                        <div className="bg-blue-100 p-1 rounded">
+                          → {calc.neighbors.right.toFixed(2)}
+                        </div>
                         <div></div>
-                        <div className="bg-blue-100 p-1 rounded">↓ {calc.neighbors.bottom.toFixed(2)}</div>
+                        <div className="bg-blue-100 p-1 rounded">
+                          ↓ {calc.neighbors.bottom.toFixed(2)}
+                        </div>
                         <div></div>
                       </div>
                       <div className="text-xs text-gray-600 text-center">
@@ -797,8 +854,10 @@ const SimplifiedPDEVisualizer = ({
           })()}
 
           <div className="mt-4 p-3 bg-blue-100 dark:bg-blue-900/30 rounded text-sm">
-            <strong>💡 What this means:</strong> These calculations happen simultaneously for all {gridWidth * gridHeight} cells every simulation step. 
-            The computer uses these values to update velocities and pressures according to the Navier-Stokes equations!
+            <strong>💡 What this means:</strong> These calculations happen
+            simultaneously for all {gridWidth * gridHeight} cells every
+            simulation step. The computer uses these values to update velocities
+            and pressures according to the Navier-Stokes equations!
           </div>
         </div>
       )}

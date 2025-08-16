@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@kanokpit.y/buy-me-a-coffee": "^1.0.5",
     "katex": "^0.16.22",
     "lucide-react": "^0.539.0",
     "next": "15.4.6",
