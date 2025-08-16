@@ -1905,22 +1905,11 @@ const CFDSimulator = () => {
   const getReynoldsNumber = () => {
     const characteristicLength = PHYSICAL_DIMENSIONS.LENGTH / 4; // Use 1/4 of domain as characteristic length (typical obstacle size)
     const velocity = settings.windSpeed; // m/s
-    const density = settings.density; // kg/m³ (assume 1.225 for air, 1000 for water)
     const kinematicViscosity = settings.viscosity; // m²/s (kinematic viscosity)
 
     return (velocity * characteristicLength) / kinematicViscosity;
   };
 
-  // Update viscosity based on desired Reynolds number
-  const setReynoldsNumber = (re: number) => {
-    const characteristicLength = PHYSICAL_DIMENSIONS.LENGTH / 4;
-    const velocity = settings.windSpeed;
-    const newViscosity = (velocity * characteristicLength) / re;
-    setSettings((prev) => ({
-      ...prev,
-      viscosity: Math.max(0.000001, Math.min(0.1, newViscosity)), // More realistic viscosity range
-    }));
-  };
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-4">
