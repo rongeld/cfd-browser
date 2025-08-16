@@ -14,7 +14,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "CFD Learning Simulator - Interactive Fluid Dynamics",
-  description: "Learn Computational Fluid Dynamics with interactive simulations, equations, and visualizations",
+  description:
+    "Learn Computational Fluid Dynamics with interactive simulations, equations, and visualizations",
 };
 
 export default function RootLayout({
