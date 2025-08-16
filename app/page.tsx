@@ -32,6 +32,7 @@ const CFDSimulator = () => {
     showVelocityField: true,
     showPressureField: false,
     showParticles: true,
+    showStreamlines: true,
     obstacleSize: 50,
     arrowSize: 1.0,
   });
@@ -115,6 +116,7 @@ const CFDSimulator = () => {
     obstacles: boolean[];
     particles: { x: number; y: number; vx: number; vy: number; life: number }[];
     smokeField: number[]; // Add smoke density field
+    streamlines: { x: number; y: number }[][]; // Add streamlines for smoke mode
     currentGridWidth: number;
     currentGridHeight: number;
   }
@@ -134,6 +136,7 @@ const CFDSimulator = () => {
       obstacles: new Array(gridSize).fill(false),
       particles: [],
       smokeField: new Array(gridSize).fill(0), // Initialize smoke field
+      streamlines: [], // Initialize streamlines
       currentGridWidth: GRID_WIDTH,
       currentGridHeight: GRID_HEIGHT,
     };
@@ -216,20 +219,14 @@ const CFDSimulator = () => {
       for (let j = 0; j < GRID_HEIGHT; j++) {
         const idx = j * GRID_WIDTH + i;
 
-        // Left boundary - inlet
-        if (i === 0) {
-          velocityX[idx] = settingsRef.current.windSpeed;
-          velocityY[idx] = 0;
-        }
-
         // Right boundary - outlet (free flow)
         if (i === GRID_WIDTH - 1) {
           velocityX[idx] = velocityX[idx - 1];
           velocityY[idx] = velocityY[idx - 1];
         }
 
-        // Top and bottom boundaries - slip conditions
-        if (j === 0) {
+        // Top and bottom boundaries - slip conditions (but not at inlet)
+        if (j === 0 && i !== 0) {
           // Top boundary: no vertical flow, but allow horizontal flow
           velocityY[idx] = 0;
           // Copy horizontal velocity from interior
@@ -237,7 +234,7 @@ const CFDSimulator = () => {
             velocityX[idx] = velocityX[(j + 1) * GRID_WIDTH + i];
           }
         }
-        if (j === GRID_HEIGHT - 1) {
+        if (j === GRID_HEIGHT - 1 && i !== 0) {
           // Bottom boundary: no vertical flow, but allow horizontal flow
           velocityY[idx] = 0;
           // Copy horizontal velocity from interior
@@ -251,6 +248,15 @@ const CFDSimulator = () => {
           velocityX[idx] = 0;
           velocityY[idx] = 0;
         }
+      }
+    }
+
+    // Apply inlet boundary conditions LAST to ensure they're not overwritten
+    for (let j = 0; j < GRID_HEIGHT; j++) {
+      const idx = j * GRID_WIDTH + 0; // Left boundary (i = 0)
+      if (!obstacles[idx]) {
+        velocityX[idx] = settingsRef.current.windSpeed;
+        velocityY[idx] = 0;
       }
     }
   };
@@ -424,6 +430,98 @@ const CFDSimulator = () => {
     simulationState.current!.smokeField = newSmoke;
   };
 
+  // Streamline generation and update functions
+  const generateStreamlines = () => {
+    const streamlines: { x: number; y: number }[][] = [];
+    const numStreamlines = 12; // Number of streamlines
+    const maxLength = 120; // Maximum points per streamline
+    const stepSize = 0.3; // Integration step size
+
+    // Generate streamlines starting from inlet (left boundary)
+    for (let i = 0; i < numStreamlines; i++) {
+      // Distribute streamlines evenly across the inlet height
+      const startY = (i + 1) * (GRID_HEIGHT / (numStreamlines + 1));
+      // Start slightly inside the domain to avoid boundary issues
+      const streamline = traceStreamline(0.5, startY, maxLength, stepSize);
+      if (streamline.length > 8) {
+        // Only keep streamlines with sufficient length
+        streamlines.push(streamline);
+      }
+    }
+
+    simulationState.current!.streamlines = streamlines;
+  };
+
+  const traceStreamline = (
+    startX: number,
+    startY: number,
+    maxLength: number,
+    stepSize: number
+  ): { x: number; y: number }[] => {
+    const streamline: { x: number; y: number }[] = [];
+    let x = startX;
+    let y = startY;
+
+    for (let i = 0; i < maxLength; i++) {
+      // Check bounds
+      if (x < 0 || x >= GRID_WIDTH || y < 0 || y >= GRID_HEIGHT) break;
+
+      const gridX = Math.floor(x);
+      const gridY = Math.floor(y);
+      const idx = gridY * GRID_WIDTH + gridX;
+
+      // Check if we hit an obstacle
+      if (simulationState.current!.obstacles[idx]) break;
+
+      streamline.push({ x: x * CELL_SIZE, y: y * CELL_SIZE });
+
+      // Get velocity at current position
+      const vx = interpolateVelocity(x, y, simulationState.current!.velocityX);
+      const vy = interpolateVelocity(x, y, simulationState.current!.velocityY);
+
+      // Check if velocity is too small (stagnation point)
+      const speed = Math.sqrt(vx * vx + vy * vy);
+      if (speed < 0.1) break;
+
+      // Integrate forward using Runge-Kutta 2nd order
+      const k1x = vx * stepSize;
+      const k1y = vy * stepSize;
+
+      const midX = x + k1x * 0.5;
+      const midY = y + k1y * 0.5;
+
+      if (midX < 0 || midX >= GRID_WIDTH || midY < 0 || midY >= GRID_HEIGHT)
+        break;
+
+      const vx_mid = interpolateVelocity(
+        midX,
+        midY,
+        simulationState.current!.velocityX
+      );
+      const vy_mid = interpolateVelocity(
+        midX,
+        midY,
+        simulationState.current!.velocityY
+      );
+
+      const k2x = vx_mid * stepSize;
+      const k2y = vy_mid * stepSize;
+
+      x += k2x;
+      y += k2y;
+    }
+
+    return streamline;
+  };
+
+  const updateStreamlines = () => {
+    // Regenerate streamlines periodically to show flow changes
+    if (Math.random() < 0.05) {
+      // 5% chance per frame to regenerate (more frequent updates)
+      generateStreamlines();
+    }
+  };
+
   // Render function
   const render = useCallback(() => {
     const canvas = canvasRef.current;
@@ -478,34 +576,100 @@ const CFDSimulator = () => {
         }
       }
 
-      // Add some velocity vectors for smoke mode (minimal)
-      if (settingsRef.current.showVelocityField) {
-        for (let i = 0; i < GRID_WIDTH; i += 6) {
-          for (let j = 0; j < GRID_HEIGHT; j += 6) {
-            const idx = j * GRID_WIDTH + i;
-            if (!obstacles[idx]) {
-              const vx = velocityX[idx];
-              const vy = velocityY[idx];
-              const speed = Math.sqrt(vx * vx + vy * vy);
+      // Draw streamlines for smoke mode (current lines that deform with pressure)
+      if (
+        settingsRef.current.showStreamlines &&
+        simulationState.current!.streamlines
+      ) {
+        const { streamlines } = simulationState.current!;
 
-              if (speed > 0.3) {
-                const x = i * CELL_SIZE;
-                const y = j * CELL_SIZE;
-                const length = Math.min(
-                  speed * 1.2 * settingsRef.current.arrowSize,
-                  CELL_SIZE * 0.3
-                );
+        streamlines.forEach((streamline, streamlineIndex) => {
+          if (streamline.length < 2) return;
 
-                ctx.strokeStyle = `rgba(255, 255, 255, 0.4)`;
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.moveTo(x, y);
-                ctx.lineTo(x + vx * length, y + vy * length);
-                ctx.stroke();
-              }
+          // Color streamlines based on smoke color scheme
+          let strokeColor;
+          switch (smokeColorModeRef.current) {
+            case "thermal":
+              strokeColor = `rgba(255, 255, 255, 0.6)`;
+              break;
+            case "rainbow":
+              strokeColor = `hsla(${
+                (streamlineIndex * 25) % 360
+              }, 70%, 70%, 0.7)`;
+              break;
+            case "plasma":
+              strokeColor = `rgba(255, 200, 255, 0.6)`;
+              break;
+            default:
+              strokeColor = `rgba(255, 255, 255, 0.5)`;
+          }
+
+          ctx.strokeStyle = strokeColor;
+          ctx.lineWidth = 1.5;
+          ctx.lineCap = "round";
+          ctx.lineJoin = "round";
+
+          // Draw smooth curved streamline
+          ctx.beginPath();
+          ctx.moveTo(streamline[0].x, streamline[0].y);
+
+          // Use quadratic curves for smoother lines
+          for (let i = 1; i < streamline.length - 1; i++) {
+            const current = streamline[i];
+            const next = streamline[i + 1];
+            const controlX = (current.x + next.x) / 2;
+            const controlY = (current.y + next.y) / 2;
+            ctx.quadraticCurveTo(current.x, current.y, controlX, controlY);
+          }
+
+          // Draw to the last point
+          if (streamline.length > 1) {
+            const lastPoint = streamline[streamline.length - 1];
+            ctx.lineTo(lastPoint.x, lastPoint.y);
+          }
+
+          ctx.stroke();
+
+          // Add flow direction indicators (small arrows along streamlines)
+          const arrowSpacing = 8; // Every 8th point
+          for (
+            let i = arrowSpacing;
+            i < streamline.length - 1;
+            i += arrowSpacing
+          ) {
+            const current = streamline[i];
+            const next = streamline[i + 1];
+
+            const dx = next.x - current.x;
+            const dy = next.y - current.y;
+            const length = Math.sqrt(dx * dx + dy * dy);
+
+            if (length > 0) {
+              const arrowSize = 3;
+              const angle = Math.atan2(dy, dx);
+
+              ctx.strokeStyle = strokeColor;
+              ctx.lineWidth = 1;
+              ctx.beginPath();
+
+              // Arrow head
+              const headX = current.x + dx * 0.7;
+              const headY = current.y + dy * 0.7;
+
+              ctx.moveTo(headX, headY);
+              ctx.lineTo(
+                headX - arrowSize * Math.cos(angle - Math.PI / 6),
+                headY - arrowSize * Math.sin(angle - Math.PI / 6)
+              );
+              ctx.moveTo(headX, headY);
+              ctx.lineTo(
+                headX - arrowSize * Math.cos(angle + Math.PI / 6),
+                headY - arrowSize * Math.sin(angle + Math.PI / 6)
+              );
+              ctx.stroke();
             }
           }
-        }
+        });
       }
     } else if (visualizationMode === "pressure") {
       // Enhanced pressure visualization mode
@@ -1640,6 +1804,7 @@ const CFDSimulator = () => {
       addSmoke();
       advectSmoke();
       diffuseSmoke();
+      updateStreamlines();
     }
 
     updateParticles();
@@ -1682,6 +1847,7 @@ const CFDSimulator = () => {
   useEffect(() => {
     initializeObstacles();
     initializeParticles();
+    generateStreamlines();
     render();
   }, []); // Only run once on mount
 
@@ -1695,6 +1861,7 @@ const CFDSimulator = () => {
       // Simulation state will auto-reinitialize due to grid size change
       initializeObstacles();
       initializeParticles();
+      generateStreamlines();
       if (!isRunning) {
         render();
       }
@@ -1714,6 +1881,16 @@ const CFDSimulator = () => {
     isRunning,
     render,
   ]);
+
+  // Generate streamlines when switching to smoke mode
+  useEffect(() => {
+    if (visualizationMode === "smoke") {
+      generateStreamlines();
+      if (!isRunning) {
+        render();
+      }
+    }
+  }, [visualizationMode]);
 
   // Separate useEffect for analysis data to avoid render function recreation
   useEffect(() => {
@@ -1772,6 +1949,8 @@ const CFDSimulator = () => {
       simulationState.current!.velocityY.fill(0);
       simulationState.current!.pressure.fill(0);
       simulationState.current!.smokeField.fill(0);
+      simulationState.current!.streamlines = [];
+      generateStreamlines();
       render();
     }, 100);
   };
@@ -1883,6 +2062,26 @@ const CFDSimulator = () => {
                         >
                           Plasma
                         </button>
+                      </div>
+
+                      {/* Streamline Toggle */}
+                      <div className="mt-3">
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={settings.showStreamlines}
+                            onChange={(e) =>
+                              setSettings((prev) => ({
+                                ...prev,
+                                showStreamlines: e.target.checked,
+                              }))
+                            }
+                            className="rounded"
+                          />
+                          <span className="text-sm">
+                            Show Streamlines (Current Lines)
+                          </span>
+                        </label>
                       </div>
                     </div>
                   )}
@@ -2227,6 +2426,11 @@ const CFDSimulator = () => {
                 <p>
                   <strong>🎨 Visualization:</strong> Switch between Particles,
                   Smoke, and Pressure modes
+                </p>
+                <p>
+                  <strong>🌊 Smoke Mode:</strong> Shows streamlines (current
+                  lines) that deform with flow pressure. Toggle streamlines
+                  on/off in smoke mode.
                 </p>
                 <p>
                   <strong>🖌️ Draw Mode:</strong> Click and drag to draw
