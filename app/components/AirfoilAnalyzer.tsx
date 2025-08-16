@@ -328,24 +328,59 @@ const AirfoilAnalyzer: React.FC = () => {
       Cm = Cm0 + Cm_alpha * alphaRad;
     }
 
-    // Add Reynolds number effects (based on wind speed)
+    // Add Reynolds number effects (based on wind speed) - Enhanced for visibility
     const referenceChord = 1.0; // Assume 1m chord for calculation
-    const kinematicViscosity = 1.81e-5; // Air at sea level
+    const kinematicViscosity = 1.81e-5; // Air at sea level (m²/s)
     const Re = (windSpeed * referenceChord) / kinematicViscosity;
-    const ReCorrection = Math.log10(Re / 100000) * 0.1;
-
-    // Reynolds number affects both lift and drag
-    if (Re < 500000) {
-      // Lower Reynolds number - reduced performance
-      Cl *= 0.9 + 0.1 * Math.log10(Re / 50000);
-      Cd *= 1.2 - 0.2 * Math.log10(Re / 50000);
+    
+    // More pronounced Reynolds number effects for better visibility
+    let ReCorrection = 1.0;
+    let CdReCorrection = 1.0;
+    
+    if (Re < 100000) {
+      // Very low Reynolds (< 100k) - significant performance loss
+      ReCorrection = 0.6 + 0.4 * (Re / 100000);
+      CdReCorrection = 2.0 - 1.0 * (Re / 100000);
+    } else if (Re < 500000) {
+      // Low Reynolds (100k-500k) - moderate performance reduction
+      ReCorrection = 0.8 + 0.2 * (Re - 100000) / 400000;
+      CdReCorrection = 1.5 - 0.3 * (Re - 100000) / 400000;
+    } else if (Re < 1000000) {
+      // Medium Reynolds (500k-1M) - approaching optimal
+      ReCorrection = 1.0 + 0.05 * (Re - 500000) / 500000;
+      CdReCorrection = 1.2 - 0.15 * (Re - 500000) / 500000;
+    } else if (Re < 3000000) {
+      // High Reynolds (1M-3M) - optimal range
+      ReCorrection = 1.05 + 0.02 * (Re - 1000000) / 2000000;
+      CdReCorrection = 1.05 - 0.05 * (Re - 1000000) / 2000000;
     } else {
-      // Higher Reynolds number - slightly better performance
-      Cd *= 1 - ReCorrection * 0.1;
+      // Very high Reynolds (> 3M) - diminishing returns
+      ReCorrection = 1.07;
+      CdReCorrection = 1.0;
+    }
+
+    // Apply Reynolds corrections
+    Cl *= ReCorrection;
+    Cd *= CdReCorrection;
+
+    // Add compressibility effects for high speeds (Mach number effects)
+    const speedOfSound = 343; // m/s at sea level
+    const machNumber = windSpeed / speedOfSound;
+    
+    if (machNumber > 0.3) {
+      // Compressibility drag rise starts around Mach 0.3-0.4
+      const compressibilityDrag = 0.01 * Math.pow(machNumber - 0.3, 2);
+      Cd += compressibilityDrag;
+      
+      // Shock-induced flow changes affect lift curve slope
+      if (machNumber > 0.7) {
+        const shockEffect = 1 - 0.2 * (machNumber - 0.7);
+        Cl *= Math.max(shockEffect, 0.7);
+      }
     }
 
     console.log(
-      `Reynolds Number: ${Re.toExponential(2)}, Wind Speed: ${windSpeed} m/s`
+      `Reynolds: ${Re.toExponential(2)}, Mach: ${machNumber.toFixed(3)}, Wind: ${windSpeed} m/s`
     );
 
     const newCoefficient: AerodynamicCoefficients = {
