@@ -1,6 +1,7 @@
 "use client";
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, BookOpen, Calculator, Eye, Lightbulb } from 'lucide-react';
+import { ChevronDown, ChevronRight, BookOpen, Calculator, Eye, Lightbulb, Cpu } from 'lucide-react';
+import PDEStepVisualizer from './PDEStepVisualizer';
 import 'katex/dist/katex.min.css';
 
 // Simple inline math component to avoid external dependencies
@@ -61,6 +62,9 @@ const CollapsibleSection = ({ title, icon, children, defaultOpen = false }: Coll
 
 interface InteractiveVisualizerProps {
   onParameterChange?: (param: string, value: number) => void;
+  simulationDebugData?: any;
+  gridWidth?: number;
+  gridHeight?: number;
 }
 
 const InteractiveVisualizer = ({ onParameterChange }: InteractiveVisualizerProps) => {
@@ -172,7 +176,7 @@ const InteractiveVisualizer = ({ onParameterChange }: InteractiveVisualizerProps
   );
 };
 
-const EducationalContent = ({ onParameterChange }: InteractiveVisualizerProps) => {
+const EducationalContent = ({ onParameterChange, simulationDebugData, gridWidth = 20, gridHeight = 20 }: InteractiveVisualizerProps) => {
   return (
     <div className="space-y-6">
       <div className="text-center mb-8">
@@ -213,21 +217,22 @@ const EducationalContent = ({ onParameterChange }: InteractiveVisualizerProps) =
         <div className="space-y-4">
           <p>
             The Navier-Stokes equations describe the motion of viscous fluids. They're based on 
-            Newton's second law applied to fluid motion.
+            Newton's second law applied to fluid motion. <strong>However, this simulator uses 
+            a simplified version for educational purposes!</strong>
           </p>
           
           <div className="space-y-4">
             <div>
-              <h4 className="font-semibold mb-2">Momentum Equation:</h4>
+              <h4 className="font-semibold mb-2">Full Navier-Stokes Momentum Equation:</h4>
               <BlockMath>∂u/∂t + (u·∇)u = -∇p/ρ + ν∇²u + f</BlockMath>
               <div className="text-sm text-gray-600 dark:text-gray-400">
                 <p><strong>Where:</strong></p>
                 <ul className="mt-2 space-y-1 ml-4">
-                  <li><MathEquation>u</MathEquation> = velocity vector</li>
-                  <li><MathEquation>p</MathEquation> = pressure</li>
-                  <li><MathEquation>ρ</MathEquation> = density</li>
-                  <li><MathEquation>ν</MathEquation> = kinematic viscosity</li>
-                  <li><MathEquation>f</MathEquation> = external forces</li>
+                  <li><MathEquation>∂u/∂t</MathEquation> = velocity change over time</li>
+                  <li><MathEquation>(u·∇)u</MathEquation> = convection (nonlinear term)</li>
+                  <li><MathEquation>∇p/ρ</MathEquation> = pressure gradient force</li>
+                  <li><MathEquation>ν∇²u</MathEquation> = viscous diffusion</li>
+                  <li><MathEquation>f</MathEquation> = external forces (gravity, etc.)</li>
                 </ul>
               </div>
             </div>
@@ -236,8 +241,21 @@ const EducationalContent = ({ onParameterChange }: InteractiveVisualizerProps) =
               <h4 className="font-semibold mb-2">Continuity Equation (Mass Conservation):</h4>
               <BlockMath>∇·u = 0</BlockMath>
               <p className="text-sm text-gray-600 dark:text-gray-400">
-                This ensures that mass is conserved - what flows in must flow out.
+                This ensures that mass is conserved - what flows in must flow out (incompressible flow).
               </p>
+            </div>
+
+            <div className="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-lg">
+              <h4 className="font-semibold mb-2">What This Simulator Actually Solves:</h4>
+              <div className="text-sm space-y-2">
+                <p><strong>1. Operator Splitting:</strong> Instead of solving everything at once, we split into steps:</p>
+                <ul className="ml-4 space-y-1">
+                  <li>• <strong>Advection step:</strong> Solve ∂u/∂t + (u·∇)u = 0</li>
+                  <li>• <strong>Viscosity step:</strong> Solve ∂u/∂t = ν∇²u</li>  
+                  <li>• <strong>Projection step:</strong> Solve ∇²p = -∇·u, then u = u - ∇p</li>
+                </ul>
+                <p><strong>2. Simplified assumptions:</strong> No body forces, constant properties, 2D only</p>
+              </div>
             </div>
           </div>
         </div>
@@ -286,37 +304,154 @@ const EducationalContent = ({ onParameterChange }: InteractiveVisualizerProps) =
         icon={<Eye className="w-5 h-5 text-orange-500" />}
       >
         <div className="space-y-4">
+          <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg">
+            <h4 className="font-semibold mb-2">⚠️ Important: This is NOT Full Navier-Stokes</h4>
+            <p className="text-sm">
+              This simulator uses a <strong>simplified incompressible flow solver</strong> - not the complete 
+              Navier-Stokes equations. It's perfect for learning basic concepts but missing many 
+              real-world complexities.
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            <h4 className="font-semibold">What's Actually Implemented:</h4>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-blue-50 dark:bg-blue-800 p-4 rounded-lg">
+                <h5 className="font-semibold mb-2">✅ Pressure Projection Method</h5>
+                <p className="text-sm">
+                  Splits each timestep into: advection → viscosity → pressure projection.
+                  Uses Jacobi iterations to solve the pressure Poisson equation.
+                </p>
+              </div>
+              
+              <div className="bg-green-50 dark:bg-green-800 p-4 rounded-lg">
+                <h5 className="font-semibold mb-2">✅ Semi-Lagrangian Advection</h5>
+                <p className="text-sm">
+                  Handles the nonlinear term (u·∇)u by tracing particles backward in time.
+                  Stable but diffusive.
+                </p>
+              </div>
+              
+              <div className="bg-purple-50 dark:bg-purple-800 p-4 rounded-lg">
+                <h5 className="font-semibold mb-2">✅ Explicit Viscosity</h5>
+                <p className="text-sm">
+                  Simple diffusion using finite differences. Fast but can be unstable 
+                  with high viscosity.
+                </p>
+              </div>
+              
+              <div className="bg-yellow-50 dark:bg-yellow-800 p-4 rounded-lg">
+                <h5 className="font-semibold mb-2">⚠️ Simplified Boundaries</h5>
+                <p className="text-sm">
+                  Basic no-slip conditions on obstacles. Real CFD uses more 
+                  sophisticated boundary treatments.
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+              <h5 className="font-semibold mb-2">Missing from Full Navier-Stokes:</h5>
+              <ul className="text-sm space-y-1 list-disc ml-4">
+                <li>Body forces (gravity, magnetic fields)</li>
+                <li>Variable density and viscosity</li>
+                <li>Turbulence modeling</li>
+                <li>Heat transfer coupling</li>
+                <li>Compressibility effects</li>
+                <li>Advanced boundary conditions</li>
+                <li>High-order spatial discretizations</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </CollapsibleSection>
+
+      <CollapsibleSection 
+        title="Live PDE Solution Process" 
+        icon={<Cpu className="w-5 h-5 text-cyan-500" />}
+      >
+        <div className="space-y-4">
           <p>
-            Since the Navier-Stokes equations are too complex to solve analytically, 
-            we use numerical methods to approximate the solution.
+            Watch how the computer solves the fluid equations step by step! This shows 
+            the actual numerical process happening behind the scenes.
+          </p>
+          
+          <PDEStepVisualizer 
+            gridWidth={gridWidth} 
+            gridHeight={gridHeight}
+            simulationData={simulationDebugData}
+            onStepUpdate={(step, data) => {
+              console.log(`Step ${step} updated:`, data);
+            }}
+          />
+        </div>
+      </CollapsibleSection>
+
+      <CollapsibleSection 
+        title="Real CFD vs This Simulator" 
+        icon={<Calculator className="w-5 h-5 text-red-500" />}
+      >
+        <div className="space-y-4">
+          <p>
+            This simulator is great for learning, but real CFD software is much more sophisticated! 
+            Here's what professional tools like ANSYS Fluent, OpenFOAM, or SU2 actually do:
           </p>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
-              <h4 className="font-semibold mb-2">Finite Difference Method</h4>
-              <p className="text-sm">
-                Approximates derivatives using discrete grid points. Simple but can be 
-                less accurate for complex geometries.
-              </p>
+            <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
+              <h4 className="font-semibold mb-2 text-green-700 dark:text-green-300">
+                🎓 This Educational Simulator
+              </h4>
+              <ul className="text-sm space-y-1">
+                <li>• 2D rectangular grid (80-300 cells)</li>
+                <li>• Operator splitting method</li>
+                <li>• Explicit time stepping</li>
+                <li>• Simple boundary conditions</li>
+                <li>• No turbulence modeling</li>
+                <li>• Fixed fluid properties</li>
+                <li>• ~60 FPS real-time</li>
+              </ul>
             </div>
             
-            <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
-              <h4 className="font-semibold mb-2">Lattice Boltzmann Method</h4>
-              <p className="text-sm">
-                Models fluid as particles moving on a lattice. Great for complex boundaries 
-                and parallel computation.
-              </p>
+            <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+              <h4 className="font-semibold mb-2 text-blue-700 dark:text-blue-300">
+                🏭 Professional CFD Software
+              </h4>
+              <ul className="text-sm space-y-1">
+                <li>• 3D unstructured meshes (millions+ cells)</li>
+                <li>• Coupled/segregated solvers</li>
+                <li>• Implicit time stepping</li>
+                <li>• Complex boundary conditions</li>
+                <li>• Advanced turbulence models (RANS, LES, DNS)</li>
+                <li>• Variable properties, heat transfer</li>
+                <li>• Hours to days for convergence</li>
+              </ul>
             </div>
           </div>
           
-          <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
-            <h4 className="font-semibold mb-2">This Simulator Uses:</h4>
-            <ul className="text-sm space-y-1">
-              <li>• Finite difference discretization on a regular grid</li>
-              <li>• Explicit time stepping for velocity updates</li>
-              <li>• Pressure projection to enforce incompressibility</li>
-              <li>• Particle tracing for flow visualization</li>
-            </ul>
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg">
+            <h4 className="font-semibold mb-2">Real CFD Equation Systems:</h4>
+            <div className="text-sm space-y-2">
+              <p><strong>RANS (Reynolds-Averaged Navier-Stokes):</strong></p>
+              <div className="bg-white dark:bg-gray-800 p-2 rounded font-mono text-xs">
+                ∂(ρū)/∂t + ∇·(ρū⊗ū) = -∇p̄ + ∇·(μ∇ū) + ∇·τ_turb + f
+              </div>
+              <p className="text-xs">Where τ_turb requires additional turbulence equations (k-ε, k-ω, SST, etc.)</p>
+              
+              <p className="mt-2"><strong>Plus energy equation for heat transfer:</strong></p>
+              <div className="bg-white dark:bg-gray-800 p-2 rounded font-mono text-xs">
+                ∂(ρcₚT)/∂t + ∇·(ρcₚūT) = ∇·(λ∇T) + Φ
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+            <h4 className="font-semibold mb-2">Why This Matters for Learning:</h4>
+            <p className="text-sm">
+              Understanding this simplified version gives you the foundation to understand real CFD! 
+              The basic concepts (discretization, pressure-velocity coupling, boundary conditions) 
+              are the same - just much more sophisticated in professional tools.
+            </p>
           </div>
         </div>
       </CollapsibleSection>

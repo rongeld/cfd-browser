@@ -50,6 +50,8 @@ const CFDSimulator = () => {
   const [visualizationMode, setVisualizationMode] = useState("standard"); // 'standard', 'pressure', or 'smoke'
   const [quality, setQuality] = useState("medium"); // 'low', 'medium', 'high', 'ultra'
   const [activeTab, setActiveTab] = useState("simulator"); // 'simulator' or 'learn'
+  const [debugMode, setDebugMode] = useState(false); // Enable PDE step visualization
+  const [simulationDebugData, setSimulationDebugData] = useState<any>(null);
   const [bezierPoints, setBezierPoints] = useState<
     { x: number; y: number }[][]
   >([]);
@@ -2010,6 +2012,9 @@ const CFDSimulator = () => {
           <div className="max-w-4xl mx-auto">
             <EducationalContent
               onParameterChange={handleEducationalParameterChange}
+              simulationDebugData={debugMode ? simulationDebugData : null}
+              gridWidth={GRID_WIDTH}
+              gridHeight={GRID_HEIGHT}
             />
           </div>
         ) : (
