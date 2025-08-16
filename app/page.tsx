@@ -53,11 +53,6 @@ const CFDSimulator = () => {
   const [visualizationMode, setVisualizationMode] = useState("standard"); // 'standard', 'pressure', or 'smoke'
   const [quality, setQuality] = useState("medium"); // 'low', 'medium', 'high', 'ultra'
   const [activeTab, setActiveTab] = useState("simulator"); // 'simulator', 'learn', or 'airfoil'
-  const [debugMode, setDebugMode] = useState(false); // Enable PDE step visualization
-  const [simulationDebugData, setSimulationDebugData] = useState<any>(null);
-  const [bezierPoints, setBezierPoints] = useState<
-    { x: number; y: number }[][]
-  >([]);
   const [currentBezier, setCurrentBezier] = useState<
     { x: number; y: number }[]
   >([]);
@@ -133,39 +128,6 @@ const CFDSimulator = () => {
     };
   }, [GRID_WIDTH]);
 
-  // Convert between physical and simulation units
-  const physicalToSim = (
-    physicalValue: number,
-    unit: "length" | "velocity" | "time"
-  ) => {
-    switch (unit) {
-      case "length":
-        return physicalValue / PHYSICAL_DIMENSIONS.GRID_SPACING;
-      case "velocity":
-        return physicalValue; // Keep as m/s for now, will normalize in solver
-      case "time":
-        return physicalValue; // seconds
-      default:
-        return physicalValue;
-    }
-  };
-
-  const simToPhysical = (
-    simValue: number,
-    unit: "length" | "velocity" | "time"
-  ) => {
-    switch (unit) {
-      case "length":
-        return simValue * PHYSICAL_DIMENSIONS.GRID_SPACING;
-      case "velocity":
-        return simValue; // m/s
-      case "time":
-        return simValue; // seconds
-      default:
-        return simValue;
-    }
-  };
-
   // Simulation state - initialize with current grid dimensions
   interface SimulationState {
     velocityX: number[];
@@ -231,12 +193,6 @@ const CFDSimulator = () => {
     }
   }, [CELL_SIZE, GRID_HEIGHT, GRID_WIDTH]);
 
-  // Get grid index from coordinates
-  const getIndex = (x: number, y: number) => {
-    const i = Math.max(0, Math.min(GRID_WIDTH - 1, Math.floor(x)));
-    const j = Math.max(0, Math.min(GRID_HEIGHT - 1, Math.floor(y)));
-    return j * GRID_WIDTH + i;
-  };
 
   // Bilinear interpolation for velocity
   const interpolateVelocity = (x: number, y: number, field: number[]) => {
@@ -1719,10 +1675,7 @@ const CFDSimulator = () => {
           if (updated.length === 4) {
             // Complete the bezier curve
             drawBezierCurve(updated, brushSize / 2);
-            setBezierPoints((prevBezier: { x: number; y: number }[][]) => [
-              ...prevBezier,
-              updated,
-            ]);
+    
             if (!isRunning) render();
             return [];
           }
@@ -2027,7 +1980,6 @@ const CFDSimulator = () => {
           <div className="max-w-4xl mx-auto">
             <EducationalContent
               onParameterChange={handleEducationalParameterChange}
-              simulationDebugData={debugMode ? simulationDebugData : null}
               gridWidth={GRID_WIDTH}
               gridHeight={GRID_HEIGHT}
             />
