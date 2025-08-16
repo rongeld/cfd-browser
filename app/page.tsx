@@ -15,7 +15,10 @@ import {
   Droplets,
   Brush,
   Eraser,
+  BookOpen,
+  Beaker,
 } from "lucide-react";
+import EducationalContent from "./components/EducationalContent";
 
 const CFDSimulator = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -25,9 +28,9 @@ const CFDSimulator = () => {
   const [isDrawing, setIsDrawing] = useState(false);
   const [brushSize, setBrushSize] = useState(10);
   const [settings, setSettings] = useState({
-    viscosity: 0.02,
-    density: 1.0,
-    windSpeed: 22.0,
+    viscosity: 0.000015, // m²/s - kinematic viscosity of air at room temperature
+    density: 1.225, // kg/m³ - density of air at sea level
+    windSpeed: 10.0, // m/s - reasonable wind speed
     particleCount: 30000,
     particlesPerSecond: 200, // New: particles generated per second at inlet
     showVelocityField: true,
@@ -46,6 +49,7 @@ const CFDSimulator = () => {
 
   const [visualizationMode, setVisualizationMode] = useState("standard"); // 'standard', 'pressure', or 'smoke'
   const [quality, setQuality] = useState("medium"); // 'low', 'medium', 'high', 'ultra'
+  const [activeTab, setActiveTab] = useState("simulator"); // 'simulator' or 'learn'
   const [bezierPoints, setBezierPoints] = useState<
     { x: number; y: number }[][]
   >([]);
@@ -108,6 +112,54 @@ const CFDSimulator = () => {
       CELL_SIZE: settings.cellSize,
     };
   }, [quality]);
+
+  // Physical dimensions of the simulation domain
+  const PHYSICAL_DIMENSIONS = useMemo(() => {
+    // Let's say our simulation represents a wind tunnel or channel
+    // Canvas aspect ratio is roughly 2:1, so let's make it realistic
+    const DOMAIN_LENGTH = 2.0; // meters (horizontal)
+    const DOMAIN_HEIGHT = 1.0; // meters (vertical)
+
+    return {
+      LENGTH: DOMAIN_LENGTH,
+      HEIGHT: DOMAIN_HEIGHT,
+      PIXELS_PER_METER: 800 / DOMAIN_LENGTH, // Canvas is ~800px wide
+      GRID_SPACING: DOMAIN_LENGTH / GRID_WIDTH, // Physical spacing between grid points in meters
+    };
+  }, [GRID_WIDTH]);
+
+  // Convert between physical and simulation units
+  const physicalToSim = (
+    physicalValue: number,
+    unit: "length" | "velocity" | "time"
+  ) => {
+    switch (unit) {
+      case "length":
+        return physicalValue / PHYSICAL_DIMENSIONS.GRID_SPACING;
+      case "velocity":
+        return physicalValue; // Keep as m/s for now, will normalize in solver
+      case "time":
+        return physicalValue; // seconds
+      default:
+        return physicalValue;
+    }
+  };
+
+  const simToPhysical = (
+    simValue: number,
+    unit: "length" | "velocity" | "time"
+  ) => {
+    switch (unit) {
+      case "length":
+        return simValue * PHYSICAL_DIMENSIONS.GRID_SPACING;
+      case "velocity":
+        return simValue; // m/s
+      case "time":
+        return simValue; // seconds
+      default:
+        return simValue;
+    }
+  };
 
   // Simulation state - initialize with current grid dimensions
   interface SimulationState {
@@ -1883,6 +1935,35 @@ const CFDSimulator = () => {
     }, 100);
   };
 
+  const handleEducationalParameterChange = (param: string, value: number) => {
+    setSettings((prev) => ({
+      ...prev,
+      [param]: value,
+    }));
+  };
+
+  // Calculate Reynolds number: Re = ρvL/μ
+  // Using proper physical dimensions and units
+  const getReynoldsNumber = () => {
+    const characteristicLength = PHYSICAL_DIMENSIONS.LENGTH / 4; // Use 1/4 of domain as characteristic length (typical obstacle size)
+    const velocity = settings.windSpeed; // m/s
+    const density = settings.density; // kg/m³ (assume 1.225 for air, 1000 for water)
+    const kinematicViscosity = settings.viscosity; // m²/s (kinematic viscosity)
+
+    return (velocity * characteristicLength) / kinematicViscosity;
+  };
+
+  // Update viscosity based on desired Reynolds number
+  const setReynoldsNumber = (re: number) => {
+    const characteristicLength = PHYSICAL_DIMENSIONS.LENGTH / 4;
+    const velocity = settings.windSpeed;
+    const newViscosity = (velocity * characteristicLength) / re;
+    setSettings((prev) => ({
+      ...prev,
+      viscosity: Math.max(0.000001, Math.min(0.1, newViscosity)), // More realistic viscosity range
+    }));
+  };
+
   return (
     <div className="min-h-screen bg-gray-900 text-white p-4">
       <div className="max-w-7xl mx-auto">
@@ -1895,351 +1976,480 @@ const CFDSimulator = () => {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Main Canvas */}
-          <div className="lg:col-span-3 space-y-6">
-            <div className="bg-gray-800 rounded-lg p-4">
-              <div className="mb-4">
+        {/* Tab Navigation */}
+        <div className="mb-6">
+          <div className="flex justify-center">
+            <div className="bg-gray-800 rounded-lg p-1 flex gap-1">
+              <button
+                onClick={() => setActiveTab("simulator")}
+                className={`px-6 py-2 rounded-md transition-colors flex items-center gap-2 ${
+                  activeTab === "simulator"
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-300 hover:text-white"
+                }`}
+              >
+                <Beaker className="w-4 h-4" />
+                Simulator
+              </button>
+              <button
+                onClick={() => setActiveTab("learn")}
+                className={`px-6 py-2 rounded-md transition-colors flex items-center gap-2 ${
+                  activeTab === "learn"
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-300 hover:text-white"
+                }`}
+              >
+                <BookOpen className="w-4 h-4" />
+                Learn CFD
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {activeTab === "learn" ? (
+          <div className="max-w-4xl mx-auto">
+            <EducationalContent
+              onParameterChange={handleEducationalParameterChange}
+            />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            {/* Main Canvas */}
+            <div className="lg:col-span-3 space-y-6">
+              <div className="bg-gray-800 rounded-lg p-4">
                 <div className="mb-4">
-                  <h2 className="text-xl font-semibold flex items-center gap-2">
-                    <Wind className="w-5 h-5" />
-                    Flow Visualization
-                  </h2>
-                  <p className="text-sm text-gray-400">
-                    Grid: {GRID_WIDTH}×{GRID_HEIGHT} ({quality} quality)
+                  <div className="mb-4">
+                    <h2 className="text-xl font-semibold flex items-center gap-2">
+                      <Wind className="w-5 h-5" />
+                      Flow Visualization
+                    </h2>
+                    <p className="text-sm text-gray-400">
+                      Grid: {GRID_WIDTH}×{GRID_HEIGHT} ({quality} quality)
+                    </p>
+                  </div>
+                  <div className="flex gap-2 flex-wrap">
+                    <div className="flex gap-1 bg-gray-700 rounded-lg p-1">
+                      <button
+                        onClick={() => setVisualizationMode("standard")}
+                        className={`px-3 py-1 rounded text-sm transition-colors ${
+                          visualizationMode === "standard"
+                            ? "bg-blue-600 text-white"
+                            : "text-gray-300 hover:text-white"
+                        }`}
+                      >
+                        Particles
+                      </button>
+                      <button
+                        onClick={() => setVisualizationMode("smoke")}
+                        className={`px-3 py-1 rounded text-sm transition-colors ${
+                          visualizationMode === "smoke"
+                            ? "bg-gray-600 text-white"
+                            : "text-gray-300 hover:text-white"
+                        }`}
+                      >
+                        Smoke
+                      </button>
+                      <button
+                        onClick={() => setVisualizationMode("pressure")}
+                        className={`px-3 py-1 rounded text-sm transition-colors ${
+                          visualizationMode === "pressure"
+                            ? "bg-purple-600 text-white"
+                            : "text-gray-300 hover:text-white"
+                        }`}
+                      >
+                        Pressure
+                      </button>
+                    </div>
+
+                    {/* Smoke Color Scheme Controls */}
+                    {visualizationMode === "smoke" && (
+                      <div className="mt-3 pt-3 border-t border-gray-600">
+                        <div className="text-sm font-medium mb-2">
+                          Smoke Color Scheme
+                        </div>
+                        <div className="grid grid-cols-2 gap-1 bg-gray-700 rounded-lg p-1">
+                          <button
+                            onClick={() => setSmokeColorMode("grayscale")}
+                            className={`px-2 py-1 rounded text-xs transition-colors ${
+                              smokeColorMode === "grayscale"
+                                ? "bg-gray-500 text-white"
+                                : "text-gray-300 hover:text-white"
+                            }`}
+                          >
+                            Grayscale
+                          </button>
+                          <button
+                            onClick={() => setSmokeColorMode("thermal")}
+                            className={`px-2 py-1 rounded text-xs transition-colors ${
+                              smokeColorMode === "thermal"
+                                ? "bg-orange-600 text-white"
+                                : "text-gray-300 hover:text-white"
+                            }`}
+                          >
+                            Thermal
+                          </button>
+                          <button
+                            onClick={() => setSmokeColorMode("rainbow")}
+                            className={`px-2 py-1 rounded text-xs transition-colors ${
+                              smokeColorMode === "rainbow"
+                                ? "bg-purple-600 text-white"
+                                : "text-gray-300 hover:text-white"
+                            }`}
+                          >
+                            Rainbow
+                          </button>
+                          <button
+                            onClick={() => setSmokeColorMode("plasma")}
+                            className={`px-2 py-1 rounded text-xs transition-colors ${
+                              smokeColorMode === "plasma"
+                                ? "bg-pink-600 text-white"
+                                : "text-gray-300 hover:text-white"
+                            }`}
+                          >
+                            Plasma
+                          </button>
+                        </div>
+
+                        {/* Streamline Toggle */}
+                        <div className="mt-3">
+                          <label className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={settings.showStreamlines}
+                              onChange={(e) =>
+                                setSettings((prev) => ({
+                                  ...prev,
+                                  showStreamlines: e.target.checked,
+                                }))
+                              }
+                              className="rounded"
+                            />
+                            <span className="text-sm">
+                              Show Streamlines (Current Lines)
+                            </span>
+                          </label>
+                        </div>
+                      </div>
+                    )}
+
+                    <button
+                      onClick={() =>
+                        setDrawingMode(drawingMode === "draw" ? "none" : "draw")
+                      }
+                      className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-colors ${
+                        drawingMode === "draw"
+                          ? "bg-red-600 hover:bg-red-700"
+                          : "bg-gray-600 hover:bg-gray-700"
+                      }`}
+                    >
+                      <Brush className="w-4 h-4" />
+                      Draw
+                    </button>
+                    <button
+                      onClick={() =>
+                        setDrawingMode(
+                          drawingMode === "bezier" ? "none" : "bezier"
+                        )
+                      }
+                      className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-colors ${
+                        drawingMode === "bezier"
+                          ? "bg-green-600 hover:bg-green-700"
+                          : "bg-gray-600 hover:bg-gray-700"
+                      }`}
+                    >
+                      <svg
+                        className="w-4 h-4"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                      >
+                        <path d="M3 12c0 0 3-6 9-6s9 6 9 6-3 6-9 6-9-6-9-6z" />
+                      </svg>
+                      Bezier
+                    </button>
+                    <button
+                      onClick={() =>
+                        setDrawingMode(
+                          drawingMode === "erase" ? "none" : "erase"
+                        )
+                      }
+                      className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-colors ${
+                        drawingMode === "erase"
+                          ? "bg-cyan-600 hover:bg-cyan-700"
+                          : "bg-gray-600 hover:bg-gray-700"
+                      }`}
+                    >
+                      <Eraser className="w-4 h-4" />
+                      Erase
+                    </button>
+
+                    {drawingMode === "bezier" && currentBezier.length > 0 && (
+                      <button
+                        onClick={() => setCurrentBezier([])}
+                        className="px-3 py-2 bg-yellow-600 hover:bg-yellow-700 rounded-lg transition-colors text-sm"
+                      >
+                        Cancel Curve
+                      </button>
+                    )}
+                    <button
+                      onClick={clearObstacles}
+                      className="px-3 py-2 bg-orange-600 hover:bg-orange-700 rounded-lg transition-colors text-sm"
+                    >
+                      Clear All
+                    </button>
+                    <div className="flex gap-1 bg-gray-700 rounded-lg p-1">
+                      <button
+                        onClick={() => setPlaybackSpeed(0.5)}
+                        className={`px-2 py-1 rounded text-xs transition-colors ${
+                          playbackSpeed === 0.5
+                            ? "bg-blue-600 text-white"
+                            : "text-gray-300 hover:text-white"
+                        }`}
+                      >
+                        0.5x
+                      </button>
+                      <button
+                        onClick={() => setPlaybackSpeed(1.0)}
+                        className={`px-2 py-1 rounded text-xs transition-colors ${
+                          playbackSpeed === 1.0
+                            ? "bg-blue-600 text-white"
+                            : "text-gray-300 hover:text-white"
+                        }`}
+                      >
+                        1x
+                      </button>
+                      <button
+                        onClick={() => setPlaybackSpeed(1.25)}
+                        className={`px-2 py-1 rounded text-xs transition-colors ${
+                          playbackSpeed === 1.25
+                            ? "bg-blue-600 text-white"
+                            : "text-gray-300 hover:text-white"
+                        }`}
+                      >
+                        1.25x
+                      </button>
+                      <button
+                        onClick={() => setPlaybackSpeed(1.5)}
+                        className={`px-2 py-1 rounded text-xs transition-colors ${
+                          playbackSpeed === 1.5
+                            ? "bg-blue-600 text-white"
+                            : "text-gray-300 hover:text-white"
+                        }`}
+                      >
+                        1.5x
+                      </button>
+                      <button
+                        onClick={() => setPlaybackSpeed(4.0)}
+                        className={`px-2 py-1 rounded text-xs transition-colors ${
+                          playbackSpeed === 4.0
+                            ? "bg-blue-600 text-white"
+                            : "text-gray-300 hover:text-white"
+                        }`}
+                      >
+                        4x
+                      </button>
+                    </div>
+
+                    <button
+                      onClick={handlePlayPause}
+                      className={`px-4 py-2 rounded-lg flex items-center gap-2 ${
+                        isRunning
+                          ? "bg-red-600 hover:bg-red-700"
+                          : "bg-green-600 hover:bg-green-700"
+                      } transition-colors`}
+                    >
+                      {isRunning ? (
+                        <Pause className="w-4 h-4" />
+                      ) : (
+                        <Play className="w-4 h-4" />
+                      )}
+                      {isRunning ? "Pause" : "Play"}
+                      {playbackSpeed !== 1.0 && (
+                        <span className="text-xs opacity-75">
+                          {playbackSpeed}x
+                        </span>
+                      )}
+                    </button>
+                    <button
+                      onClick={handleReset}
+                      className="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg flex items-center gap-2 transition-colors"
+                    >
+                      <RotateCcw className="w-4 h-4" />
+                      Reset
+                    </button>
+                  </div>
+                </div>
+                <div className="bg-black rounded-lg overflow-hidden relative">
+                  <canvas
+                    key={`canvas-${quality}`}
+                    ref={canvasRef}
+                    width={GRID_WIDTH * CELL_SIZE}
+                    height={GRID_HEIGHT * CELL_SIZE}
+                    className={`w-full h-auto ${
+                      quality === "ultra"
+                        ? "max-h-[700px]"
+                        : quality === "high"
+                        ? "max-h-[650px]"
+                        : "max-h-[600px]"
+                    } ${
+                      drawingMode === "draw" || drawingMode === "bezier"
+                        ? "cursor-crosshair"
+                        : drawingMode === "erase"
+                        ? "cursor-pointer"
+                        : "cursor-crosshair"
+                    }`}
+                    onMouseDown={handleMouseDown}
+                    onMouseMove={handleMouseMove}
+                    onMouseUp={handleMouseUp}
+                    onMouseLeave={handleMouseLeave}
+                  />
+                  <div className="absolute top-2 left-2 bg-black bg-opacity-75 text-white px-2 py-1 rounded text-sm">
+                    {drawingMode === "draw" && "🖌️ Drawing obstacles"}
+                    {drawingMode === "erase" && "🧽 Erasing obstacles"}
+                    {drawingMode === "bezier" && (
+                      <div>
+                        📐 Bezier curve: Click 4 points
+                        {currentBezier.length > 0 && (
+                          <div className="text-xs">
+                            Point {currentBezier.length}/4 -{" "}
+                            {currentBezier.length === 1
+                              ? "Start point"
+                              : currentBezier.length === 2
+                              ? "Control point 1"
+                              : currentBezier.length === 3
+                              ? "Control point 2"
+                              : "End point"}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {drawingMode === "none" &&
+                      "🔍 Click anywhere to analyze flow data"}
+                  </div>
+                </div>
+              </div>
+              {quality === "ultra" && (
+                <div className="bg-yellow-900 border border-yellow-600 rounded-lg p-4">
+                  <h3 className="text-lg font-semibold mb-2 text-yellow-300">
+                    ⚠️ Performance Notice
+                  </h3>
+                  <p className="text-sm text-yellow-200">
+                    Ultra quality uses a 300×200 grid which may impact
+                    performance on slower devices. Consider using High quality
+                    for the best balance of detail and performance.
                   </p>
                 </div>
-                <div className="flex gap-2 flex-wrap">
-                  <div className="flex gap-1 bg-gray-700 rounded-lg p-1">
-                    <button
-                      onClick={() => setVisualizationMode("standard")}
-                      className={`px-3 py-1 rounded text-sm transition-colors ${
-                        visualizationMode === "standard"
-                          ? "bg-blue-600 text-white"
-                          : "text-gray-300 hover:text-white"
-                      }`}
-                    >
-                      Particles
-                    </button>
-                    <button
-                      onClick={() => setVisualizationMode("smoke")}
-                      className={`px-3 py-1 rounded text-sm transition-colors ${
-                        visualizationMode === "smoke"
-                          ? "bg-gray-600 text-white"
-                          : "text-gray-300 hover:text-white"
-                      }`}
-                    >
-                      Smoke
-                    </button>
-                    <button
-                      onClick={() => setVisualizationMode("pressure")}
-                      className={`px-3 py-1 rounded text-sm transition-colors ${
-                        visualizationMode === "pressure"
-                          ? "bg-purple-600 text-white"
-                          : "text-gray-300 hover:text-white"
-                      }`}
-                    >
-                      Pressure
-                    </button>
-                  </div>
-
-                  {/* Smoke Color Scheme Controls */}
-                  {visualizationMode === "smoke" && (
-                    <div className="mt-3 pt-3 border-t border-gray-600">
-                      <div className="text-sm font-medium mb-2">
-                        Smoke Color Scheme
-                      </div>
-                      <div className="grid grid-cols-2 gap-1 bg-gray-700 rounded-lg p-1">
-                        <button
-                          onClick={() => setSmokeColorMode("grayscale")}
-                          className={`px-2 py-1 rounded text-xs transition-colors ${
-                            smokeColorMode === "grayscale"
-                              ? "bg-gray-500 text-white"
-                              : "text-gray-300 hover:text-white"
-                          }`}
-                        >
-                          Grayscale
-                        </button>
-                        <button
-                          onClick={() => setSmokeColorMode("thermal")}
-                          className={`px-2 py-1 rounded text-xs transition-colors ${
-                            smokeColorMode === "thermal"
-                              ? "bg-orange-600 text-white"
-                              : "text-gray-300 hover:text-white"
-                          }`}
-                        >
-                          Thermal
-                        </button>
-                        <button
-                          onClick={() => setSmokeColorMode("rainbow")}
-                          className={`px-2 py-1 rounded text-xs transition-colors ${
-                            smokeColorMode === "rainbow"
-                              ? "bg-purple-600 text-white"
-                              : "text-gray-300 hover:text-white"
-                          }`}
-                        >
-                          Rainbow
-                        </button>
-                        <button
-                          onClick={() => setSmokeColorMode("plasma")}
-                          className={`px-2 py-1 rounded text-xs transition-colors ${
-                            smokeColorMode === "plasma"
-                              ? "bg-pink-600 text-white"
-                              : "text-gray-300 hover:text-white"
-                          }`}
-                        >
-                          Plasma
-                        </button>
-                      </div>
-
-                      {/* Streamline Toggle */}
-                      <div className="mt-3">
-                        <label className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={settings.showStreamlines}
-                            onChange={(e) =>
-                              setSettings((prev) => ({
-                                ...prev,
-                                showStreamlines: e.target.checked,
-                              }))
-                            }
-                            className="rounded"
-                          />
-                          <span className="text-sm">
-                            Show Streamlines (Current Lines)
-                          </span>
-                        </label>
-                      </div>
-                    </div>
-                  )}
-
-                  <button
-                    onClick={() =>
-                      setDrawingMode(drawingMode === "draw" ? "none" : "draw")
-                    }
-                    className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-colors ${
-                      drawingMode === "draw"
-                        ? "bg-red-600 hover:bg-red-700"
-                        : "bg-gray-600 hover:bg-gray-700"
-                    }`}
-                  >
-                    <Brush className="w-4 h-4" />
-                    Draw
-                  </button>
-                  <button
-                    onClick={() =>
-                      setDrawingMode(
-                        drawingMode === "bezier" ? "none" : "bezier"
-                      )
-                    }
-                    className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-colors ${
-                      drawingMode === "bezier"
-                        ? "bg-green-600 hover:bg-green-700"
-                        : "bg-gray-600 hover:bg-gray-700"
-                    }`}
-                  >
-                    <svg
-                      className="w-4 h-4"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                    >
-                      <path d="M3 12c0 0 3-6 9-6s9 6 9 6-3 6-9 6-9-6-9-6z" />
-                    </svg>
-                    Bezier
-                  </button>
-                  <button
-                    onClick={() =>
-                      setDrawingMode(drawingMode === "erase" ? "none" : "erase")
-                    }
-                    className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-colors ${
-                      drawingMode === "erase"
-                        ? "bg-cyan-600 hover:bg-cyan-700"
-                        : "bg-gray-600 hover:bg-gray-700"
-                    }`}
-                  >
-                    <Eraser className="w-4 h-4" />
-                    Erase
-                  </button>
-
-                  {drawingMode === "bezier" && currentBezier.length > 0 && (
-                    <button
-                      onClick={() => setCurrentBezier([])}
-                      className="px-3 py-2 bg-yellow-600 hover:bg-yellow-700 rounded-lg transition-colors text-sm"
-                    >
-                      Cancel Curve
-                    </button>
-                  )}
-                  <button
-                    onClick={clearObstacles}
-                    className="px-3 py-2 bg-orange-600 hover:bg-orange-700 rounded-lg transition-colors text-sm"
-                  >
-                    Clear All
-                  </button>
-                  <div className="flex gap-1 bg-gray-700 rounded-lg p-1">
-                    <button
-                      onClick={() => setPlaybackSpeed(0.5)}
-                      className={`px-2 py-1 rounded text-xs transition-colors ${
-                        playbackSpeed === 0.5
-                          ? "bg-blue-600 text-white"
-                          : "text-gray-300 hover:text-white"
-                      }`}
-                    >
-                      0.5x
-                    </button>
-                    <button
-                      onClick={() => setPlaybackSpeed(1.0)}
-                      className={`px-2 py-1 rounded text-xs transition-colors ${
-                        playbackSpeed === 1.0
-                          ? "bg-blue-600 text-white"
-                          : "text-gray-300 hover:text-white"
-                      }`}
-                    >
-                      1x
-                    </button>
-                    <button
-                      onClick={() => setPlaybackSpeed(1.25)}
-                      className={`px-2 py-1 rounded text-xs transition-colors ${
-                        playbackSpeed === 1.25
-                          ? "bg-blue-600 text-white"
-                          : "text-gray-300 hover:text-white"
-                      }`}
-                    >
-                      1.25x
-                    </button>
-                    <button
-                      onClick={() => setPlaybackSpeed(1.5)}
-                      className={`px-2 py-1 rounded text-xs transition-colors ${
-                        playbackSpeed === 1.5
-                          ? "bg-blue-600 text-white"
-                          : "text-gray-300 hover:text-white"
-                      }`}
-                    >
-                      1.5x
-                    </button>
-                    <button
-                      onClick={() => setPlaybackSpeed(4.0)}
-                      className={`px-2 py-1 rounded text-xs transition-colors ${
-                        playbackSpeed === 4.0
-                          ? "bg-blue-600 text-white"
-                          : "text-gray-300 hover:text-white"
-                      }`}
-                    >
-                      4x
-                    </button>
-                  </div>
-
-                  <button
-                    onClick={handlePlayPause}
-                    className={`px-4 py-2 rounded-lg flex items-center gap-2 ${
-                      isRunning
-                        ? "bg-red-600 hover:bg-red-700"
-                        : "bg-green-600 hover:bg-green-700"
-                    } transition-colors`}
-                  >
-                    {isRunning ? (
-                      <Pause className="w-4 h-4" />
-                    ) : (
-                      <Play className="w-4 h-4" />
-                    )}
-                    {isRunning ? "Pause" : "Play"}
-                    {playbackSpeed !== 1.0 && (
-                      <span className="text-xs opacity-75">
-                        {playbackSpeed}x
-                      </span>
-                    )}
-                  </button>
-                  <button
-                    onClick={handleReset}
-                    className="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg flex items-center gap-2 transition-colors"
-                  >
-                    <RotateCcw className="w-4 h-4" />
-                    Reset
-                  </button>
-                </div>
-              </div>
-              <div className="bg-black rounded-lg overflow-hidden relative">
-                <canvas
-                  key={`canvas-${quality}`}
-                  ref={canvasRef}
-                  width={GRID_WIDTH * CELL_SIZE}
-                  height={GRID_HEIGHT * CELL_SIZE}
-                  className={`w-full h-auto ${
-                    quality === "ultra"
-                      ? "max-h-[700px]"
-                      : quality === "high"
-                      ? "max-h-[650px]"
-                      : "max-h-[600px]"
-                  } ${
-                    drawingMode === "draw" || drawingMode === "bezier"
-                      ? "cursor-crosshair"
-                      : drawingMode === "erase"
-                      ? "cursor-pointer"
-                      : "cursor-crosshair"
-                  }`}
-                  onMouseDown={handleMouseDown}
-                  onMouseMove={handleMouseMove}
-                  onMouseUp={handleMouseUp}
-                  onMouseLeave={handleMouseLeave}
-                />
-                <div className="absolute top-2 left-2 bg-black bg-opacity-75 text-white px-2 py-1 rounded text-sm">
-                  {drawingMode === "draw" && "🖌️ Drawing obstacles"}
-                  {drawingMode === "erase" && "🧽 Erasing obstacles"}
-                  {drawingMode === "bezier" && (
-                    <div>
-                      📐 Bezier curve: Click 4 points
-                      {currentBezier.length > 0 && (
-                        <div className="text-xs">
-                          Point {currentBezier.length}/4 -{" "}
-                          {currentBezier.length === 1
-                            ? "Start point"
-                            : currentBezier.length === 2
-                            ? "Control point 1"
-                            : currentBezier.length === 3
-                            ? "Control point 2"
-                            : "End point"}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {drawingMode === "none" &&
-                    "🔍 Click anywhere to analyze flow data"}
-                </div>
-              </div>
-            </div>
-            {quality === "ultra" && (
-              <div className="bg-yellow-900 border border-yellow-600 rounded-lg p-4">
-                <h3 className="text-lg font-semibold mb-2 text-yellow-300">
-                  ⚠️ Performance Notice
+              )}
+              <div className="bg-gray-800 rounded-lg p-4">
+                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                  <Droplets className="w-5 h-5" />
+                  Visualization
                 </h3>
-                <p className="text-sm text-yellow-200">
-                  Ultra quality uses a 300×200 grid which may impact performance
-                  on slower devices. Consider using High quality for the best
-                  balance of detail and performance.
-                </p>
-              </div>
-            )}
-            <div className="bg-gray-800 rounded-lg p-4">
-              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <Droplets className="w-5 h-5" />
-                Visualization
-              </h3>
 
-              <div className="space-y-3">
-                <div className="mb-3">
-                  <div className="text-sm font-medium mb-2">
-                    Visualization Mode
+                <div className="space-y-3">
+                  <div className="mb-3">
+                    <div className="text-sm font-medium mb-2">
+                      Visualization Mode
+                    </div>
+                    <div className="text-xs text-gray-400 mb-2">
+                      {visualizationMode === "standard"
+                        ? "Standard flow visualization with particles and velocity vectors"
+                        : "Enhanced pressure field visualization with contour lines"}
+                    </div>
                   </div>
-                  <div className="text-xs text-gray-400 mb-2">
-                    {visualizationMode === "standard"
-                      ? "Standard flow visualization with particles and velocity vectors"
-                      : "Enhanced pressure field visualization with contour lines"}
-                  </div>
-                </div>
 
-                {visualizationMode === "standard" && (
-                  <>
+                  {visualizationMode === "standard" && (
+                    <>
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={settings.showVelocityField}
+                          onChange={(e) =>
+                            setSettings((prev) => ({
+                              ...prev,
+                              showVelocityField: e.target.checked,
+                            }))
+                          }
+                          className="rounded"
+                        />
+                        <span className="text-sm">Velocity Field</span>
+                      </label>
+
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={settings.showPressureField}
+                          onChange={(e) =>
+                            setSettings((prev) => ({
+                              ...prev,
+                              showPressureField: e.target.checked,
+                            }))
+                          }
+                          className="rounded"
+                        />
+                        <span className="text-sm">Pressure Field</span>
+                      </label>
+
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={settings.showParticles}
+                          onChange={(e) =>
+                            setSettings((prev) => ({
+                              ...prev,
+                              showParticles: e.target.checked,
+                            }))
+                          }
+                          className="rounded"
+                        />
+                        <span className="text-sm">Particle Traces</span>
+                      </label>
+
+                      {settings.showParticles && (
+                        <>
+                          <div className="mt-3 pt-3 border-t border-gray-600">
+                            <div className="text-sm font-medium mb-2">
+                              Particle Color Mode
+                            </div>
+                            <div className="flex gap-1 bg-gray-700 rounded-lg p-1">
+                              <button
+                                onClick={() => setColorMode("speed")}
+                                className={`px-3 py-1 rounded text-xs transition-colors ${
+                                  colorMode === "speed"
+                                    ? "bg-blue-600 text-white"
+                                    : "text-gray-300 hover:text-white"
+                                }`}
+                              >
+                                Speed
+                              </button>
+                              <button
+                                onClick={() => setColorMode("pressure")}
+                                className={`px-3 py-1 rounded text-xs transition-colors ${
+                                  colorMode === "pressure"
+                                    ? "bg-purple-600 text-white"
+                                    : "text-gray-300 hover:text-white"
+                                }`}
+                              >
+                                Pressure
+                              </button>
+                            </div>
+                          </div>
+
+                          <label className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={showScale}
+                              onChange={(e) => setShowScale(e.target.checked)}
+                              className="rounded"
+                            />
+                            <span className="text-sm">Show Color Scale</span>
+                          </label>
+                        </>
+                      )}
+                    </>
+                  )}
+
+                  {visualizationMode === "pressure" && (
                     <label className="flex items-center gap-2">
                       <input
                         type="checkbox"
@@ -2252,400 +2462,340 @@ const CFDSimulator = () => {
                         }
                         className="rounded"
                       />
-                      <span className="text-sm">Velocity Field</span>
+                      <span className="text-sm">Velocity Vectors</span>
                     </label>
+                  )}
+                </div>
+              </div>
 
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={settings.showPressureField}
-                        onChange={(e) =>
-                          setSettings((prev) => ({
-                            ...prev,
-                            showPressureField: e.target.checked,
-                          }))
-                        }
-                        className="rounded"
-                      />
-                      <span className="text-sm">Pressure Field</span>
+              <div className="bg-gray-800 rounded-lg p-4">
+                <h3 className="text-lg font-semibold mb-3">How to Use</h3>
+                <div className="text-sm text-gray-400 space-y-2">
+                  <p>
+                    <strong>🎨 Visualization:</strong> Switch between Particles,
+                    Smoke, and Pressure modes
+                  </p>
+                  <p>
+                    <strong>🌊 Smoke Mode:</strong> Shows streamlines (current
+                    lines) that deform with flow pressure. Toggle streamlines
+                    on/off in smoke mode.
+                  </p>
+                  <p>
+                    <strong>🖌️ Draw Mode:</strong> Click and drag to draw
+                    obstacles
+                  </p>
+                  <p>
+                    <strong>📐 Bezier Mode:</strong> Click 4 points to create
+                    smooth curves
+                  </p>
+                  <p>
+                    <strong>🔍 Analyze Mode:</strong> Click anywhere to see flow
+                    data
+                  </p>
+                  <p>
+                    <strong>🧽 Erase Mode:</strong> Click and drag to remove
+                    obstacles
+                  </p>
+                  <p>
+                    <strong>▶️ Simulation:</strong> Press Play to start fluid
+                    simulation
+                  </p>
+                  <p>
+                    <strong>⚙️ Parameters:</strong> Adjust settings to see
+                    different flow behaviors
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-gray-800 rounded-lg p-4">
+                <h3 className="text-lg font-semibold mb-3">Playback Speed</h3>
+                <div className="text-sm text-gray-400 space-y-2">
+                  <p>Control simulation speed from 0.25x to 3x:</p>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-blue-500 rounded"></div>
+                    <span>Quick buttons: 0.5x, 1x, 1.25x, 1.5x, 2x</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-green-500 rounded"></div>
+                    <span>Slider: Fine control 0.25x - 3x</span>
+                  </div>
+                  <p className="text-xs">
+                    Higher speeds may impact performance on slower devices
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-gray-800 rounded-lg p-4">
+                <h3 className="text-lg font-semibold mb-3">Color Modes</h3>
+                <div className="text-sm text-gray-400 space-y-2">
+                  <div>
+                    <strong className="text-blue-400">Speed Mode:</strong>
+                    <div className="ml-2 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 bg-blue-500 rounded"></div>
+                        <span>Slow (Blue)</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 bg-green-500 rounded"></div>
+                        <span>Medium (Green)</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 bg-yellow-500 rounded"></div>
+                        <span>Fast (Yellow/Red)</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <strong className="text-gray-400">
+                      Smoke Color Schemes:
+                    </strong>
+                    <div className="ml-2 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 bg-gray-500 rounded"></div>
+                        <span>Grayscale - Classic smoke</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 bg-orange-500 rounded"></div>
+                        <span>Thermal - Heat map style</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 bg-purple-500 rounded"></div>
+                        <span>Rainbow - Full spectrum</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 bg-pink-500 rounded"></div>
+                        <span>Plasma - ANSYS style</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <strong className="text-purple-400">Pressure Mode:</strong>
+                    <div className="ml-2 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 bg-blue-500 rounded"></div>
+                        <span>Low Pressure (Blue)</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 bg-green-500 rounded"></div>
+                        <span>Neutral (Green)</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 bg-red-500 rounded"></div>
+                        <span>High Pressure (Red)</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-gray-800 rounded-lg p-4">
+                <h3 className="text-lg font-semibold mb-3">
+                  Pressure Visualization
+                </h3>
+                <div className="text-sm text-gray-400 space-y-2">
+                  <p className="text-xs">
+                    In pressure mode, white dots show pressure contour lines
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-gray-800 rounded-lg p-4">
+                <h3 className="text-lg font-semibold mb-3">About</h3>
+                <p className="text-sm text-gray-400">
+                  This CFD simulator demonstrates fluid flow around custom
+                  obstacles using the Navier-Stokes equations. Draw your own
+                  shapes to see how different geometries affect flow patterns,
+                  vortex formation, and pressure distribution.
+                </p>
+              </div>
+            </div>
+
+            {/* Controls */}
+            <div className="space-y-4">
+              <div className="bg-gray-800 rounded-lg p-4">
+                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                  <Settings className="w-5 h-5" />
+                  Simulation Parameters
+                </h3>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Simulation Quality
                     </label>
+                    <select
+                      value={quality}
+                      onChange={(e) => setQuality(e.target.value)}
+                      className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white"
+                    >
+                      <option value="low">Low (80×40) - Fast</option>
+                      <option value="medium">Medium (120×60) - Balanced</option>
+                      <option value="high">High (160×80) - Detailed</option>
+                      <option value="ultra">Ultra (300×200) - Maximum</option>
+                    </select>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Higher quality = more accurate simulation but slower
+                      performance
+                    </p>
+                  </div>
 
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={settings.showParticles}
-                        onChange={(e) =>
-                          setSettings((prev) => ({
-                            ...prev,
-                            showParticles: e.target.checked,
-                          }))
-                        }
-                        className="rounded"
-                      />
-                      <span className="text-sm">Particle Traces</span>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      {drawingMode === "bezier"
+                        ? "Curve Thickness"
+                        : "Brush Size"}
+                      : {brushSize}px
                     </label>
-
-                    {settings.showParticles && (
-                      <>
-                        <div className="mt-3 pt-3 border-t border-gray-600">
-                          <div className="text-sm font-medium mb-2">
-                            Particle Color Mode
-                          </div>
-                          <div className="flex gap-1 bg-gray-700 rounded-lg p-1">
-                            <button
-                              onClick={() => setColorMode("speed")}
-                              className={`px-3 py-1 rounded text-xs transition-colors ${
-                                colorMode === "speed"
-                                  ? "bg-blue-600 text-white"
-                                  : "text-gray-300 hover:text-white"
-                              }`}
-                            >
-                              Speed
-                            </button>
-                            <button
-                              onClick={() => setColorMode("pressure")}
-                              className={`px-3 py-1 rounded text-xs transition-colors ${
-                                colorMode === "pressure"
-                                  ? "bg-purple-600 text-white"
-                                  : "text-gray-300 hover:text-white"
-                              }`}
-                            >
-                              Pressure
-                            </button>
-                          </div>
-                        </div>
-
-                        <label className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={showScale}
-                            onChange={(e) => setShowScale(e.target.checked)}
-                            className="rounded"
-                          />
-                          <span className="text-sm">Show Color Scale</span>
-                        </label>
-                      </>
-                    )}
-                  </>
-                )}
-
-                {visualizationMode === "pressure" && (
-                  <label className="flex items-center gap-2">
                     <input
-                      type="checkbox"
-                      checked={settings.showVelocityField}
+                      type="range"
+                      min="5"
+                      max="50"
+                      step="5"
+                      value={brushSize}
+                      onChange={(e) => setBrushSize(parseInt(e.target.value))}
+                      className="w-full"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Arrow Size: {settings.arrowSize.toFixed(1)}x
+                    </label>
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="3.0"
+                      step="0.1"
+                      value={settings.arrowSize}
                       onChange={(e) =>
                         setSettings((prev) => ({
                           ...prev,
-                          showVelocityField: e.target.checked,
+                          arrowSize: parseFloat(e.target.value),
                         }))
                       }
-                      className="rounded"
+                      className="w-full"
                     />
-                    <span className="text-sm">Velocity Vectors</span>
-                  </label>
-                )}
-              </div>
-            </div>
-
-            <div className="bg-gray-800 rounded-lg p-4">
-              <h3 className="text-lg font-semibold mb-3">How to Use</h3>
-              <div className="text-sm text-gray-400 space-y-2">
-                <p>
-                  <strong>🎨 Visualization:</strong> Switch between Particles,
-                  Smoke, and Pressure modes
-                </p>
-                <p>
-                  <strong>🌊 Smoke Mode:</strong> Shows streamlines (current
-                  lines) that deform with flow pressure. Toggle streamlines
-                  on/off in smoke mode.
-                </p>
-                <p>
-                  <strong>🖌️ Draw Mode:</strong> Click and drag to draw
-                  obstacles
-                </p>
-                <p>
-                  <strong>📐 Bezier Mode:</strong> Click 4 points to create
-                  smooth curves
-                </p>
-                <p>
-                  <strong>🔍 Analyze Mode:</strong> Click anywhere to see flow
-                  data
-                </p>
-                <p>
-                  <strong>🧽 Erase Mode:</strong> Click and drag to remove
-                  obstacles
-                </p>
-                <p>
-                  <strong>▶️ Simulation:</strong> Press Play to start fluid
-                  simulation
-                </p>
-                <p>
-                  <strong>⚙️ Parameters:</strong> Adjust settings to see
-                  different flow behaviors
-                </p>
-              </div>
-            </div>
-
-            <div className="bg-gray-800 rounded-lg p-4">
-              <h3 className="text-lg font-semibold mb-3">Playback Speed</h3>
-              <div className="text-sm text-gray-400 space-y-2">
-                <p>Control simulation speed from 0.25x to 3x:</p>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-blue-500 rounded"></div>
-                  <span>Quick buttons: 0.5x, 1x, 1.25x, 1.5x, 2x</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-green-500 rounded"></div>
-                  <span>Slider: Fine control 0.25x - 3x</span>
-                </div>
-                <p className="text-xs">
-                  Higher speeds may impact performance on slower devices
-                </p>
-              </div>
-            </div>
-
-            <div className="bg-gray-800 rounded-lg p-4">
-              <h3 className="text-lg font-semibold mb-3">Color Modes</h3>
-              <div className="text-sm text-gray-400 space-y-2">
-                <div>
-                  <strong className="text-blue-400">Speed Mode:</strong>
-                  <div className="ml-2 space-y-1">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 bg-blue-500 rounded"></div>
-                      <span>Slow (Blue)</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 bg-green-500 rounded"></div>
-                      <span>Medium (Green)</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 bg-yellow-500 rounded"></div>
-                      <span>Fast (Yellow/Red)</span>
-                    </div>
                   </div>
-                </div>
-                <div>
-                  <strong className="text-gray-400">
-                    Smoke Color Schemes:
-                  </strong>
-                  <div className="ml-2 space-y-1">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 bg-gray-500 rounded"></div>
-                      <span>Grayscale - Classic smoke</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 bg-orange-500 rounded"></div>
-                      <span>Thermal - Heat map style</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 bg-purple-500 rounded"></div>
-                      <span>Rainbow - Full spectrum</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 bg-pink-500 rounded"></div>
-                      <span>Plasma - ANSYS style</span>
-                    </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Wind Speed: {settings.windSpeed.toFixed(1)} m/s
+                    </label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="0.5"
+                      value={settings.windSpeed}
+                      onChange={(e) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          windSpeed: parseFloat(e.target.value),
+                        }))
+                      }
+                      className="w-full"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Domain: {PHYSICAL_DIMENSIONS.LENGTH}m ×{" "}
+                      {PHYSICAL_DIMENSIONS.HEIGHT}m | Grid:{" "}
+                      {PHYSICAL_DIMENSIONS.GRID_SPACING.toFixed(3)}m spacing
+                    </p>
                   </div>
-                </div>
-                <div>
-                  <strong className="text-purple-400">Pressure Mode:</strong>
-                  <div className="ml-2 space-y-1">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 bg-blue-500 rounded"></div>
-                      <span>Low Pressure (Blue)</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 bg-green-500 rounded"></div>
-                      <span>Neutral (Green)</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 bg-red-500 rounded"></div>
-                      <span>High Pressure (Red)</span>
-                    </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Kinematic Viscosity: {settings.viscosity.toExponential(2)}{" "}
+                      m²/s
+                    </label>
+                    <input
+                      type="range"
+                      min="0.000001"
+                      max="0.0001"
+                      step="0.000001"
+                      value={settings.viscosity}
+                      onChange={(e) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          viscosity: parseFloat(e.target.value),
+                        }))
+                      }
+                      className="w-full"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Air: ~1.5×10⁻⁵ m²/s | Water: ~1×10⁻⁶ m²/s
+                    </p>
                   </div>
-                </div>
-              </div>
-            </div>
 
-            <div className="bg-gray-800 rounded-lg p-4">
-              <h3 className="text-lg font-semibold mb-3">
-                Pressure Visualization
-              </h3>
-              <div className="text-sm text-gray-400 space-y-2">
-                <p className="text-xs">
-                  In pressure mode, white dots show pressure contour lines
-                </p>
-              </div>
-            </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Reynolds Number: {getReynoldsNumber().toFixed(0)}
+                    </label>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {getReynoldsNumber() < 1 &&
+                        "Creeping flow - viscous forces dominate"}
+                      {getReynoldsNumber() >= 1 &&
+                        getReynoldsNumber() < 40 &&
+                        "Steady laminar flow"}
+                      {getReynoldsNumber() >= 40 &&
+                        getReynoldsNumber() < 200 &&
+                        "Vortex shedding begins"}
+                      {getReynoldsNumber() >= 200 &&
+                        getReynoldsNumber() < 1000 &&
+                        "Turbulent wake"}
+                      {getReynoldsNumber() >= 1000 && "Fully turbulent flow"}
+                    </p>
+                  </div>
 
-            <div className="bg-gray-800 rounded-lg p-4">
-              <h3 className="text-lg font-semibold mb-3">About</h3>
-              <p className="text-sm text-gray-400">
-                This CFD simulator demonstrates fluid flow around custom
-                obstacles using the Navier-Stokes equations. Draw your own
-                shapes to see how different geometries affect flow patterns,
-                vortex formation, and pressure distribution.
-              </p>
-            </div>
-          </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Max Particles: {settings.particleCount}
+                    </label>
+                    <input
+                      type="range"
+                      min="500"
+                      max="50000"
+                      step="100"
+                      value={settings.particleCount}
+                      onChange={(e) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          particleCount: parseInt(e.target.value),
+                        }))
+                      }
+                      className="w-full"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Maximum number of particles in the domain
+                    </p>
+                  </div>
 
-          {/* Controls */}
-          <div className="space-y-4">
-            <div className="bg-gray-800 rounded-lg p-4">
-              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <Settings className="w-5 h-5" />
-                Simulation Parameters
-              </h3>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Simulation Quality
-                  </label>
-                  <select
-                    value={quality}
-                    onChange={(e) => setQuality(e.target.value)}
-                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white"
-                  >
-                    <option value="low">Low (80×40) - Fast</option>
-                    <option value="medium">Medium (120×60) - Balanced</option>
-                    <option value="high">High (160×80) - Detailed</option>
-                    <option value="ultra">Ultra (300×200) - Maximum</option>
-                  </select>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Higher quality = more accurate simulation but slower
-                    performance
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    {drawingMode === "bezier"
-                      ? "Curve Thickness"
-                      : "Brush Size"}
-                    : {brushSize}px
-                  </label>
-                  <input
-                    type="range"
-                    min="5"
-                    max="50"
-                    step="5"
-                    value={brushSize}
-                    onChange={(e) => setBrushSize(parseInt(e.target.value))}
-                    className="w-full"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Arrow Size: {settings.arrowSize.toFixed(1)}x
-                  </label>
-                  <input
-                    type="range"
-                    min="0.5"
-                    max="3.0"
-                    step="0.1"
-                    value={settings.arrowSize}
-                    onChange={(e) =>
-                      setSettings((prev) => ({
-                        ...prev,
-                        arrowSize: parseFloat(e.target.value),
-                      }))
-                    }
-                    className="w-full"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Wind Speed: {settings.windSpeed.toFixed(1)}
-                  </label>
-                  <input
-                    type="range"
-                    min="0"
-                    max="200"
-                    step="0.5"
-                    value={settings.windSpeed}
-                    onChange={(e) =>
-                      setSettings((prev) => ({
-                        ...prev,
-                        windSpeed: parseFloat(e.target.value),
-                      }))
-                    }
-                    className="w-full"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Viscosity: {settings.viscosity.toFixed(3)}
-                  </label>
-                  <input
-                    type="range"
-                    min="0"
-                    max="0.1"
-                    step="0.005"
-                    value={settings.viscosity}
-                    onChange={(e) =>
-                      setSettings((prev) => ({
-                        ...prev,
-                        viscosity: parseFloat(e.target.value),
-                      }))
-                    }
-                    className="w-full"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Max Particles: {settings.particleCount}
-                  </label>
-                  <input
-                    type="range"
-                    min="500"
-                    max="50000"
-                    step="100"
-                    value={settings.particleCount}
-                    onChange={(e) =>
-                      setSettings((prev) => ({
-                        ...prev,
-                        particleCount: parseInt(e.target.value),
-                      }))
-                    }
-                    className="w-full"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Maximum number of particles in the domain
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Inlet Rate: {settings.particlesPerSecond} particles/sec
-                  </label>
-                  <input
-                    type="range"
-                    min="50"
-                    max="10000"
-                    step="10"
-                    value={settings.particlesPerSecond}
-                    onChange={(e) =>
-                      setSettings((prev) => ({
-                        ...prev,
-                        particlesPerSecond: parseInt(e.target.value),
-                      }))
-                    }
-                    className="w-full"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Particles generated per second at inlet
-                  </p>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Inlet Rate: {settings.particlesPerSecond} particles/sec
+                    </label>
+                    <input
+                      type="range"
+                      min="50"
+                      max="10000"
+                      step="10"
+                      value={settings.particlesPerSecond}
+                      onChange={(e) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          particlesPerSecond: parseInt(e.target.value),
+                        }))
+                      }
+                      className="w-full"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Particles generated per second at inlet
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
