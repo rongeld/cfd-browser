@@ -8,8 +8,10 @@ import {
   Eye,
   Lightbulb,
   Cpu,
+  Wind,
+  Gauge,
 } from "lucide-react";
-import PDEStepVisualizer from "./PDEStepVisualizer";
+import SimplifiedPDEVisualizer from "./SimplifiedPDEVisualizer";
 import "katex/dist/katex.min.css";
 
 // Simple inline math component to avoid external dependencies
@@ -212,19 +214,72 @@ const EducationalContent = ({
           dynamics
         </p>
       </div>
-
       <CollapsibleSection
         title="What is Computational Fluid Dynamics?"
         icon={<BookOpen className="w-5 h-5 text-blue-500" />}
         defaultOpen={true}
       >
         <div className="space-y-4">
-          <p>
-            Computational Fluid Dynamics (CFD) is a branch of fluid mechanics
-            that uses numerical analysis to solve and analyze problems involving
-            fluid flows. This simulator demonstrates how fluids behave when
-            encountering obstacles.
-          </p>
+          <div className="bg-gradient-to-r from-blue-50 to-green-50 dark:from-blue-900/20 dark:to-green-900/20 p-4 rounded-lg">
+            <h4 className="font-semibold mb-2">🌊 Think of it like this:</h4>
+            <p className="text-sm">
+              Imagine you're watching invisible air flow around a car. CFD is
+              like having super-vision that lets you see the air, measure its
+              speed, and predict where it will go next!
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg text-center">
+              <Wind className="w-8 h-8 mx-auto mb-2 text-blue-500" />
+              <h5 className="font-semibold mb-1">Real World</h5>
+              <p className="text-xs">
+                Air flows around objects but we can't see it
+              </p>
+            </div>
+
+            <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg text-center">
+              <Gauge className="w-8 h-8 mx-auto mb-2 text-green-500" />
+              <h5 className="font-semibold mb-1">Computer Model</h5>
+              <p className="text-xs">
+                We break space into a grid and calculate air flow
+              </p>
+            </div>
+
+            <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg text-center">
+              <Eye className="w-8 h-8 mx-auto mb-2 text-purple-500" />
+              <h5 className="font-semibold mb-1">Visualization</h5>
+              <p className="text-xs">
+                We color and animate the results to see the flow
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg">
+            <h4 className="font-semibold mb-2">🎯 Why is this useful?</h4>
+            <ul className="text-sm space-y-1 list-disc ml-4">
+              <li>
+                <strong>Car design:</strong> Make cars more aerodynamic to save
+                fuel
+              </li>
+              <li>
+                <strong>Airplane wings:</strong> Design better lift and reduce
+                drag
+              </li>
+              <li>
+                <strong>Weather prediction:</strong> Predict how air masses will
+                move
+              </li>
+              <li>
+                <strong>Building design:</strong> Prevent dangerous wind around
+                skyscrapers
+              </li>
+              <li>
+                <strong>Medical devices:</strong> Design heart pumps and
+                breathing aids
+              </li>
+            </ul>
+          </div>
 
           <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
             <h4 className="font-semibold mb-2">Key Concepts:</h4>
@@ -249,7 +304,6 @@ const EducationalContent = ({
           </div>
         </div>
       </CollapsibleSection>
-
       <CollapsibleSection
         title="The Navier-Stokes Equations"
         icon={<Calculator className="w-5 h-5 text-green-500" />}
@@ -338,7 +392,6 @@ const EducationalContent = ({
           </div>
         </div>
       </CollapsibleSection>
-
       <CollapsibleSection
         title="Reynolds Number & Flow Regimes"
         icon={<Calculator className="w-5 h-5 text-purple-500" />}
@@ -399,7 +452,6 @@ const EducationalContent = ({
           <InteractiveVisualizer onParameterChange={onParameterChange} />
         </div>
       </CollapsibleSection>
-
       <CollapsibleSection
         title="Numerical Methods"
         icon={<Eye className="w-5 h-5 text-orange-500" />}
@@ -476,28 +528,30 @@ const EducationalContent = ({
           </div>
         </div>
       </CollapsibleSection>
-
       <CollapsibleSection
-        title="Live PDE Solution Process"
+        title="How Does a Computer Solve Fluid Flow?"
         icon={<Cpu className="w-5 h-5 text-cyan-500" />}
       >
         <div className="space-y-4">
+          <div className="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-lg">
+            <h4 className="font-semibold mb-2">🧠 The Big Idea:</h4>
+            <p className="text-sm">
+              The computer can't think about "fluid flow" as a whole - that's
+              too complicated! Instead, it breaks the problem into tiny pieces
+              and solves each piece step by step. It's like solving a huge
+              jigsaw puzzle one piece at a time.
+            </p>
+          </div>
+
           <p>
-            Watch how the computer solves the fluid equations step by step! This
-            shows the actual numerical process happening behind the scenes.
+            Let's break down the complex math into simple steps that anyone can
+            understand! Watch how the computer thinks about fluid flow, step by
+            step.
           </p>
 
-          <PDEStepVisualizer
-            gridWidth={gridWidth}
-            gridHeight={gridHeight}
-            simulationData={simulationDebugData}
-            onStepUpdate={(step, data) => {
-              console.log(`Step ${step} updated:`, data);
-            }}
-          />
+          <SimplifiedPDEVisualizer />
         </div>
-      </CollapsibleSection>
-
+      </CollapsibleSection>{" "}
       <CollapsibleSection
         title="Real CFD vs This Simulator"
         icon={<Calculator className="w-5 h-5 text-red-500" />}
@@ -577,7 +631,6 @@ const EducationalContent = ({
           </div>
         </div>
       </CollapsibleSection>
-
       <CollapsibleSection
         title="Experiment Ideas"
         icon={<Lightbulb className="w-5 h-5 text-yellow-500" />}
