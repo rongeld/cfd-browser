@@ -193,7 +193,6 @@ const CFDSimulator = () => {
     }
   }, [CELL_SIZE, GRID_HEIGHT, GRID_WIDTH]);
 
-
   // Bilinear interpolation for velocity
   const interpolateVelocity = (x: number, y: number, field: number[]) => {
     const x0 = Math.floor(x);
@@ -1675,7 +1674,7 @@ const CFDSimulator = () => {
           if (updated.length === 4) {
             // Complete the bezier curve
             drawBezierCurve(updated, brushSize / 2);
-    
+
             if (!isRunning) render();
             return [];
           }
@@ -1728,14 +1727,26 @@ const CFDSimulator = () => {
       render();
     }
   };
+  // CHORIN'S PROJECTION METHOD - Complete algorithm implementation
+  // Solves incompressible Navier-Stokes: ∂u/∂t + (u·∇)u = -∇p + ν∇²u, ∇·u = 0
   const simulationStep = useCallback(() => {
-    applyBoundaryConditions();
-    applyViscosity();
-    projectVelocity();
-    advectVelocity();
+    // Step 1: Apply boundary conditions u|∂Ω = g
     applyBoundaryConditions();
 
-    // Add smoke simulation
+    // Step 2: Viscous step - solve ∂u/∂t = ν∇²u (explicit)
+    applyViscosity();
+
+    // Step 3: Projection step - enforce incompressibility ∇·u = 0
+    // Solve: ∇²p = ∇·u*, then u^{n+1} = u* - ∇p
+    projectVelocity();
+
+    // Step 4: Advection step - solve ∂u/∂t + (u·∇)u = 0 (semi-Lagrangian)
+    advectVelocity();
+
+    // Step 5: Re-apply boundary conditions to maintain constraints
+    applyBoundaryConditions();
+
+    // Additional physics: smoke transport and particle tracing
     if (visualizationMode === "smoke") {
       addSmoke();
       advectSmoke();
@@ -1909,7 +1920,6 @@ const CFDSimulator = () => {
 
     return (velocity * characteristicLength) / kinematicViscosity;
   };
-
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-4">
