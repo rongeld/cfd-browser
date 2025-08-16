@@ -28,7 +28,8 @@ const CFDSimulator = () => {
     viscosity: 0.02,
     density: 1.0,
     windSpeed: 22.0,
-    particleCount: 5000,
+    particleCount: 30000,
+    particlesPerSecond: 200, // New: particles generated per second at inlet
     showVelocityField: true,
     showPressureField: false,
     showParticles: true,
@@ -117,6 +118,7 @@ const CFDSimulator = () => {
     particles: { x: number; y: number; vx: number; vy: number; life: number }[];
     smokeField: number[]; // Add smoke density field
     streamlines: { x: number; y: number }[][]; // Add streamlines for smoke mode
+    particleGenerationTimer: number; // Timer for particle generation
     currentGridWidth: number;
     currentGridHeight: number;
   }
@@ -137,25 +139,17 @@ const CFDSimulator = () => {
       particles: [],
       smokeField: new Array(gridSize).fill(0), // Initialize smoke field
       streamlines: [], // Initialize streamlines
+      particleGenerationTimer: 0, // Initialize particle generation timer
       currentGridWidth: GRID_WIDTH,
       currentGridHeight: GRID_HEIGHT,
     };
   }
 
-  // Initialize particles
+  // Initialize particles (start with empty array - particles will be generated at inlet)
   const initializeParticles = useCallback(() => {
-    const particles = [];
-    for (let i = 0; i < settingsRef.current.particleCount; i++) {
-      particles.push({
-        x: Math.random() * GRID_WIDTH * CELL_SIZE,
-        y: Math.random() * GRID_HEIGHT * CELL_SIZE,
-        vx: 0,
-        vy: 0,
-        life: 1.0,
-      });
-    }
-    simulationState.current!.particles = particles;
-  }, [CELL_SIZE, GRID_HEIGHT, GRID_WIDTH]); // Remove dependency - will be called manually when needed
+    simulationState.current!.particles = [];
+    simulationState.current!.particleGenerationTimer = 0;
+  }, []); // No dependencies needed
 
   // Initialize obstacles (start with no obstacles) - only called on first load or quality change
   const initializeObstacles = useCallback(() => {
@@ -1419,68 +1413,33 @@ const CFDSimulator = () => {
     }
   };
 
-  // Update particles
+  // Update particles with inlet generation system
   const updateParticles = () => {
     const particles = simulationState.current!.particles;
-    const dt = 0.016;
+    const dt = 0.016; // ~60fps
 
-    // Adjust particle count dynamically
-    const targetCount = settingsRef.current.particleCount;
-    const currentCount = particles.length;
+    // Generate new particles at inlet based on particles per second
+    simulationState.current!.particleGenerationTimer += dt;
+    const particleInterval = 1.0 / settingsRef.current.particlesPerSecond; // Time between particle generation
 
-    if (currentCount < targetCount) {
-      // Add particles distributed across the canvas proportionally
-      const particlesToAdd = targetCount - currentCount;
-
-      // If we have existing particles, distribute new ones proportionally
-      if (currentCount > 0) {
-        for (let i = 0; i < particlesToAdd; i++) {
-          // Choose a random existing particle to use as a reference
-          const refParticle =
-            particles[Math.floor(Math.random() * currentCount)];
-
-          // Add some randomness around the reference particle's position
-          const spreadX = CELL_SIZE * 10; // Horizontal spread
-          const spreadY = CELL_SIZE * 5; // Vertical spread
-
-          particles.push({
-            x: Math.max(
-              0,
-              Math.min(
-                GRID_WIDTH * CELL_SIZE,
-                refParticle.x + (Math.random() - 0.5) * spreadX
-              )
-            ),
-            y: Math.max(
-              0,
-              Math.min(
-                GRID_HEIGHT * CELL_SIZE,
-                refParticle.y + (Math.random() - 0.5) * spreadY
-              )
-            ),
-            vx: refParticle.vx + (Math.random() - 0.5) * 0.5, // Small velocity variation
-            vy: refParticle.vy + (Math.random() - 0.5) * 0.5,
-            life: Math.random() * 0.5 + 0.5, // Random life between 0.5-1.0
-          });
-        }
-      } else {
-        // If no existing particles, distribute uniformly across canvas
-        for (let i = 0; i < particlesToAdd; i++) {
-          particles.push({
-            x: Math.random() * GRID_WIDTH * CELL_SIZE,
-            y: Math.random() * GRID_HEIGHT * CELL_SIZE,
-            vx: 0,
-            vy: 0,
-            life: 1.0,
-          });
-        }
-      }
-    } else if (currentCount > targetCount) {
-      // Remove particles from the end (oldest particles)
-      particles.splice(targetCount);
+    while (
+      simulationState.current!.particleGenerationTimer >= particleInterval
+    ) {
+      // Generate a new particle at the inlet
+      particles.push({
+        x: Math.random() * CELL_SIZE * 2, // Small inlet region
+        y: Math.random() * GRID_HEIGHT * CELL_SIZE,
+        vx: settingsRef.current.windSpeed,
+        vy: (Math.random() - 0.5) * 0.5, // Small random vertical velocity
+        life: 1.0,
+      });
+      simulationState.current!.particleGenerationTimer -= particleInterval;
     }
 
-    particles.forEach((particle: any) => {
+    // Update existing particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const particle = particles[i];
+
       // Get velocity at particle position
       const gridX = particle.x / CELL_SIZE;
       const gridY = particle.y / CELL_SIZE;
@@ -1488,30 +1447,22 @@ const CFDSimulator = () => {
       // Check if particle is inside an obstacle
       const particleGridX = Math.floor(gridX);
       const particleGridY = Math.floor(gridY);
-      const particleIdx = particleGridY * GRID_WIDTH + particleGridX;
 
       if (
         particleGridX >= 0 &&
         particleGridX < GRID_WIDTH &&
         particleGridY >= 0 &&
-        particleGridY < GRID_HEIGHT &&
-        simulationState.current!.obstacles[particleIdx]
+        particleGridY < GRID_HEIGHT
       ) {
-        // Particle is inside obstacle - respawn at inlet
-        particle.x = Math.random() * CELL_SIZE * 3;
-        particle.y = Math.random() * GRID_HEIGHT * CELL_SIZE;
-        particle.vx = settingsRef.current.windSpeed;
-        particle.vy = 0;
-        particle.life = 1.0;
-        return; // Skip further processing for this particle
-      }
+        const particleIdx = particleGridY * GRID_WIDTH + particleGridX;
 
-      if (
-        gridX >= 0 &&
-        gridX < GRID_WIDTH &&
-        gridY >= 0 &&
-        gridY < GRID_HEIGHT
-      ) {
+        if (simulationState.current!.obstacles[particleIdx]) {
+          // Particle hit obstacle - remove it
+          particles.splice(i, 1);
+          continue;
+        }
+
+        // Get velocity from flow field
         const vx = interpolateVelocity(
           gridX,
           gridY,
@@ -1533,71 +1484,46 @@ const CFDSimulator = () => {
         // Check if new position is inside an obstacle
         const newGridX = Math.floor(particle.x / CELL_SIZE);
         const newGridY = Math.floor(particle.y / CELL_SIZE);
-        const newIdx = newGridY * GRID_WIDTH + newGridX;
 
         if (
           newGridX >= 0 &&
           newGridX < GRID_WIDTH &&
           newGridY >= 0 &&
-          newGridY < GRID_HEIGHT &&
-          simulationState.current!.obstacles[newIdx]
+          newGridY < GRID_HEIGHT
         ) {
-          // Collision detected - respawn particle at inlet
-          particle.x = Math.random() * CELL_SIZE * 3;
-          particle.y = Math.random() * GRID_HEIGHT * CELL_SIZE;
-          particle.vx = settingsRef.current.windSpeed;
-          particle.vy = 0;
-          particle.life = 1.0;
+          const newIdx = newGridY * GRID_WIDTH + newGridX;
+          if (simulationState.current!.obstacles[newIdx]) {
+            // Collision detected - remove particle
+            particles.splice(i, 1);
+            continue;
+          }
         }
       }
 
-      // Handle boundary conditions - maintain consistent flow
-      if (particle.x > GRID_WIDTH * CELL_SIZE) {
-        // Particle exits right side - respawn from left (inlet)
-        particle.x = Math.random() * CELL_SIZE * 3; // Small inlet region
-        particle.y = Math.random() * GRID_HEIGHT * CELL_SIZE;
-        particle.vx = settingsRef.current.windSpeed;
-        particle.vy = 0;
-        particle.life = 1.0;
-      } else if (particle.x < 0) {
-        // Particle exits left side - respawn from left (inlet)
-        particle.x = Math.random() * CELL_SIZE * 3;
-        particle.y = Math.random() * GRID_HEIGHT * CELL_SIZE;
-        particle.vx = settingsRef.current.windSpeed;
-        particle.vy = 0;
-        particle.life = 1.0;
-      } else if (particle.y > GRID_HEIGHT * CELL_SIZE || particle.y < 0) {
-        // Particle hits top/bottom boundaries - respawn from inlet for consistent flow
-        particle.x = Math.random() * CELL_SIZE * 3;
-        particle.y = Math.random() * GRID_HEIGHT * CELL_SIZE;
-        particle.vx = settingsRef.current.windSpeed;
-        particle.vy = 0;
-        particle.life = 1.0;
+      // Remove particles that exit the domain
+      if (
+        particle.x > GRID_WIDTH * CELL_SIZE || // Right boundary
+        particle.x < 0 || // Left boundary (backflow)
+        particle.y > GRID_HEIGHT * CELL_SIZE || // Bottom boundary
+        particle.y < 0 // Top boundary
+      ) {
+        particles.splice(i, 1);
+        continue;
       }
 
-      // Reduce life slowly but don't remove particles based on life
-      particle.life *= 0.9995; // Changed from 0.999 to make it even slower
-      if (particle.life < 0.01) {
-        // Only reset when very low
-        particle.life = 1.0;
-        // Optionally respawn at inlet when life expires
-        particle.x = Math.random() * CELL_SIZE * 3;
-        particle.y = Math.random() * GRID_HEIGHT * CELL_SIZE;
+      // Age particles and remove old ones
+      particle.life *= 0.998; // Gradual aging
+      if (particle.life < 0.1) {
+        particles.splice(i, 1);
+        continue;
       }
-    });
+    }
 
-    // Final safety check: ensure we always have the right number of particles
-    const finalCount = particles.length;
-    if (finalCount < targetCount) {
-      for (let i = finalCount; i < targetCount; i++) {
-        particles.push({
-          x: Math.random() * CELL_SIZE * 5,
-          y: Math.random() * GRID_HEIGHT * CELL_SIZE,
-          vx: 0,
-          vy: 0,
-          life: 1.0,
-        });
-      }
+    // Limit total particle count to prevent memory issues
+    const maxParticles = settingsRef.current.particleCount;
+    if (particles.length > maxParticles) {
+      // Remove oldest particles (from the beginning of the array)
+      particles.splice(0, particles.length - maxParticles);
     }
   };
 
@@ -1950,6 +1876,8 @@ const CFDSimulator = () => {
       simulationState.current!.pressure.fill(0);
       simulationState.current!.smokeField.fill(0);
       simulationState.current!.streamlines = [];
+      simulationState.current!.particles = [];
+      simulationState.current!.particleGenerationTimer = 0;
       generateStreamlines();
       render();
     }, 100);
@@ -2671,23 +2599,48 @@ const CFDSimulator = () => {
 
                 <div>
                   <label className="block text-sm font-medium mb-2">
-                    Particle Count: {settings.particleCount}
+                    Max Particles: {settings.particleCount}
                   </label>
                   <input
                     type="range"
-                    min="100"
+                    min="500"
                     max="50000"
                     step="100"
                     value={settings.particleCount}
                     onChange={(e) =>
                       setSettings((prev) => ({
                         ...prev,
-
                         particleCount: parseInt(e.target.value),
                       }))
                     }
                     className="w-full"
                   />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Maximum number of particles in the domain
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Inlet Rate: {settings.particlesPerSecond} particles/sec
+                  </label>
+                  <input
+                    type="range"
+                    min="50"
+                    max="10000"
+                    step="10"
+                    value={settings.particlesPerSecond}
+                    onChange={(e) =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        particlesPerSecond: parseInt(e.target.value),
+                      }))
+                    }
+                    className="w-full"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Particles generated per second at inlet
+                  </p>
                 </div>
               </div>
             </div>
