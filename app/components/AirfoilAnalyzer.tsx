@@ -56,6 +56,8 @@ const AirfoilAnalyzer: React.FC = () => {
     useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisComplete, setAnalysisComplete] = useState(false);
+  const [showManualInput, setShowManualInput] = useState(false);
+  const [manualAirfoilData, setManualAirfoilData] = useState("");
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Parse airfoil data from the API response
@@ -96,6 +98,30 @@ const AirfoilAnalyzer: React.FC = () => {
       upperSurface,
       lowerSurface,
     };
+  };
+
+  // Handle manual airfoil data input
+  const handleManualAirfoilData = () => {
+    if (!manualAirfoilData.trim()) {
+      setError("Please enter airfoil data");
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const parsedData = parseAirfoilData(manualAirfoilData);
+      setAirfoilData(parsedData);
+      setShowManualInput(false);
+      setManualAirfoilData("");
+      setError(null);
+    } catch (err) {
+      setError("Invalid airfoil data format. Please check your input.");
+      console.error("Error parsing manual airfoil data:", err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Fetch airfoil data from the API
@@ -1403,48 +1429,113 @@ const AirfoilAnalyzer: React.FC = () => {
             >
               NACA 2412
             </button>
-            <button
-              onClick={async () => {
-                setAirfoilName("naca0012-il");
-                // Load NACA 0012 (symmetric airfoil)
-                const sampleData = `NACA 0012
-1.000000  0.000000
-0.950000  0.006000
-0.900000  0.012000
-0.800000  0.024000
-0.700000  0.036000
-0.600000  0.048000
-0.500000  0.060000
-0.400000  0.072000
-0.300000  0.084000
-0.200000  0.096000
-0.100000  0.108000
-0.050000  0.114000
-0.000000  0.120000
-0.050000  0.114000
-0.100000  0.108000
-0.200000  0.096000
-0.300000  0.084000
-0.400000  0.072000
-0.500000  0.060000
-0.600000  0.048000
-0.700000  0.036000
-0.800000  0.024000
-0.900000  0.012000
-0.950000  0.006000
-1.000000  0.000000`;
-
-                const parsedData = parseAirfoilData(sampleData);
-                setAirfoilData(parsedData);
-                await calculateCoefficients(parsedData, angleOfAttack);
-                setError(null);
-              }}
-              className="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors text-sm"
-            >
-              NACA 0012
-            </button>
           </div>
+          <button
+            onClick={() => setShowManualInput(true)}
+            className="px-3 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors text-sm"
+          >
+            Manual Input
+          </button>
         </div>
+
+        {/* Manual Input Modal */}
+        {showManualInput && (
+          <div className="mb-4 bg-gray-800 border border-gray-600 rounded-lg p-4">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-lg font-semibold text-white">
+                Manual Airfoil Data Input
+              </h3>
+              <button
+                onClick={() => setShowManualInput(false)}
+                className="px-2 py-1 bg-gray-600 hover:bg-gray-500 rounded text-xs transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+
+            <div className="mb-3">
+              <p className="text-sm text-gray-300 mb-2">
+                Enter airfoil data in format: Name on first line, then X Y
+                coordinates (one pair per line)
+              </p>
+              <p className="text-xs text-gray-400 mb-2">Example format:</p>
+              <pre className="text-xs text-gray-400 bg-gray-900 p-2 rounded overflow-x-auto">
+                {`CLARK K AIRFOIL
+1.000000  0.000600
+0.899080  0.023420
+0.798280  0.043650
+...`}
+              </pre>
+            </div>
+
+            <textarea
+              value={manualAirfoilData}
+              onChange={(e) => setManualAirfoilData(e.target.value)}
+              placeholder="CLARK K AIRFOIL
+1.000000  0.000600
+0.899080  0.023420
+0.798280  0.043650
+0.697600  0.060990
+..."
+              className="w-full h-40 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white placeholder-gray-400 font-mono text-sm resize-vertical"
+            />
+
+            <div className="flex justify-end gap-2 mt-3">
+              <button
+                onClick={() => {
+                  const clarkKData = `CLARK K AIRFOIL
+1.000000  0.000600
+0.899080  0.023420
+0.798280  0.043650
+0.697600  0.060990
+0.597040  0.075020
+0.496660  0.084670
+0.396470  0.089620
+0.296510  0.088680
+0.196830  0.080550
+0.097610  0.060650
+0.072950  0.052070
+0.048370  0.041410
+0.023920  0.027340
+0.000000  0.000000
+0.025950 -0.024180
+0.051050 -0.026590
+0.076110 -0.028200
+0.101220 -0.031010
+0.201250 -0.031770
+0.301110 -0.028140
+0.400950 -0.024200
+0.500800 -0.020270
+0.600640 -0.016330
+0.700490 -0.012400
+0.800330 -0.008470
+0.900180 -0.004530
+1.000000 -0.000600`;
+                  setManualAirfoilData(clarkKData);
+                }}
+                className="px-3 py-1 bg-green-600 hover:bg-green-700 rounded transition-colors text-sm"
+              >
+                Load Example
+              </button>
+              <button
+                onClick={() => {
+                  setManualAirfoilData("");
+                  setShowManualInput(false);
+                }}
+                className="px-3 py-1 bg-gray-600 hover:bg-gray-500 rounded transition-colors text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleManualAirfoilData}
+                disabled={!manualAirfoilData.trim()}
+                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 rounded transition-colors text-sm"
+              >
+                Load Data
+              </button>
+            </div>
+          </div>
+        )}
 
         {error && (
           <div className="bg-red-900 border border-red-600 rounded-lg p-3 text-red-200 mb-4">
@@ -1500,19 +1591,7 @@ const AirfoilAnalyzer: React.FC = () => {
               >
                 Airfoil
               </button>
-              <button
-                onClick={() => {
-                  setShowClCdGraph(true);
-                  setShowPressureVisualization(false);
-                }}
-                className={`px-3 py-1 rounded text-sm transition-colors ${
-                  showClCdGraph
-                    ? "bg-blue-600 text-white"
-                    : "bg-gray-600 text-gray-300"
-                }`}
-              >
-                Cl/Cd Graph
-              </button>
+
               <button
                 onClick={() => {
                   setShowClCdGraph(false);
@@ -1524,7 +1603,7 @@ const AirfoilAnalyzer: React.FC = () => {
                     : "bg-gray-600 text-gray-300"
                 }`}
               >
-                Pressure
+                Pressure (under development)
               </button>
               {showPressureVisualization && (
                 <button
