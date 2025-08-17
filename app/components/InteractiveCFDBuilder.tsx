@@ -32,10 +32,131 @@ interface Step {
 const InteractiveCFDBuilder: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animationRef = useRef<number | null>(null);
+  const codeScrollRef = useRef<HTMLDivElement | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
   const [showCode, setShowCode] = useState(true);
   const [showPhysics, setShowPhysics] = useState(true);
+  const [isScrolling, setIsScrolling] = useState(false);
+
+  // Build cumulative code up to current step
+  const getCumulativeCode = () => {
+    const cumulativeLines: Array<{
+      text: string;
+      stepId: number;
+      isNew: boolean;
+      isStepSeparator?: boolean;
+    }> = [];
+
+    for (let i = 0; i <= currentStep; i++) {
+      const step = steps[i];
+      step.codeChanges.additions.forEach((line) => {
+        cumulativeLines.push({
+          text: line,
+          stepId: i,
+          isNew: i === currentStep,
+          isStepSeparator: false,
+        });
+      });
+
+      // Add separator between steps (except for last step)
+      if (i < currentStep) {
+        cumulativeLines.push({
+          text: "",
+          stepId: i,
+          isNew: false,
+          isStepSeparator: false,
+        });
+        cumulativeLines.push({
+          text: `// ==================== Step ${i + 2}: ${
+            steps[i + 1]?.title
+          } ====================`,
+          stepId: i,
+          isNew: false,
+          isStepSeparator: true,
+        });
+        cumulativeLines.push({
+          text: "",
+          stepId: i,
+          isNew: false,
+          isStepSeparator: false,
+        });
+      }
+    }
+
+    return cumulativeLines;
+  };
+
+  // Scroll to newly added code when step changes
+  const scrollToNewCode = () => {
+    if (!codeScrollRef.current || !showCode) return;
+
+    const container = codeScrollRef.current;
+
+    // Wait for DOM to fully update
+    setTimeout(() => {
+      // Try to find the first highlighted element with actual content
+      const highlightedElements = container.querySelectorAll(
+        '[data-is-new="true"]'
+      );
+      let targetElement = null;
+
+      // Find the first highlighted element that has non-empty text content
+      for (let i = 0; i < highlightedElements.length; i++) {
+        const element = highlightedElements[i] as HTMLElement;
+        const textContent = element.textContent?.trim() || '';
+        if (textContent !== '' && !textContent.startsWith('//')) {
+          targetElement = element;
+          break;
+        }
+      }
+
+      if (targetElement) {
+        setIsScrolling(true);
+
+        // Calculate scroll position - we want to show the new content near the top
+        const elementOffsetTop = (targetElement as HTMLElement).offsetTop;
+        
+        // Target position: show new code about 60px from the top of visible area
+        const targetScrollTop = elementOffsetTop - 60;
+
+        container.scrollTo({
+          top: Math.max(0, targetScrollTop),
+          behavior: "smooth",
+        });
+
+        // Hide scrolling indicator after animation
+        setTimeout(() => {
+          setIsScrolling(false);
+        }, 1200);
+      } else {
+        // Fallback: scroll toward the end where new content appears
+        const maxScroll = container.scrollHeight - container.clientHeight;
+        if (maxScroll > 0) {
+          setIsScrolling(true);
+          container.scrollTo({
+            top: Math.max(0, maxScroll - 50), // Leave some space at bottom
+            behavior: "smooth",
+          });
+          setTimeout(() => {
+            setIsScrolling(false);
+          }, 1200);
+        }
+      }
+    }, 200); // Longer delay to ensure rendering is complete
+  };
+
+  // Trigger scroll when step changes
+  useEffect(() => {
+    if (showCode) {
+      // Longer delay to ensure the DOM has fully updated with new content
+      const timer = setTimeout(() => {
+        scrollToNewCode();
+      }, 150);
+
+      return () => clearTimeout(timer);
+    }
+  }, [currentStep, showCode]);
 
   const steps: Step[] = [
     {
@@ -497,7 +618,7 @@ const InteractiveCFDBuilder: React.FC = () => {
           "            field[index - 1] + field[index + 1] +",
           "            field[index - GRID_WIDTH] + field[index + GRID_WIDTH]",
           "          )",
-          "        ) / beta;",
+          "        )",
           "      }",
           "    }",
           "  }",
@@ -1392,39 +1513,141 @@ const InteractiveCFDBuilder: React.FC = () => {
                 <div className="px-6 py-4 border-b border-gray-700">
                   <h3 className="text-lg font-semibold flex items-center gap-2">
                     <Code className="w-5 h-5 text-green-400" />
-                    Code Changes
+                    Complete CFD Code
+                    <span className="text-sm text-gray-400 ml-2">
+                      (Current step highlighted)
+                    </span>
                   </h3>
                 </div>
                 <div className="p-6">
-                  <pre className="bg-gray-900 rounded-lg p-4 overflow-x-auto">
-                    <code className="text-sm">
-                      {currentStepData.codeChanges.additions.map(
-                        (line, index) => (
+                  <div
+                    ref={codeScrollRef}
+                    className="bg-gray-900 rounded-lg p-4 pl-12 max-h-96 overflow-y-auto overflow-x-auto relative"
+                  >
+                    <pre>
+                      <code className="text-sm">
+                        {getCumulativeCode().map((lineObj, index) => (
                           <div
                             key={index}
-                            className={line.trim() === "" ? "h-4" : ""}
+                            data-is-new={lineObj.isNew}
+                            data-step-id={lineObj.stepId}
+                            className={`relative ${
+                              lineObj.text.trim() === "" ? "h-4" : ""
+                            } ${
+                              lineObj.isNew
+                                ? `bg-green-900/30 border-l-2 border-green-400 pl-3 ${
+                                    isScrolling ? "animate-pulse" : ""
+                                  }`
+                                : ""
+                            } ${
+                              lineObj.isStepSeparator
+                                ? "border-t border-gray-600 pt-2 mt-2"
+                                : ""
+                            }`}
                           >
-                            <span className="text-green-400">+ </span>
-                            <span className="text-gray-300">{line}</span>
+                            {/* Line number */}
+                            <span className="absolute left-[-35px] text-xs text-gray-600 select-none w-6 text-right">
+                              {lineObj.text.trim() !== "" &&
+                              !lineObj.isStepSeparator
+                                ? getCumulativeCode()
+                                    .slice(0, index + 1)
+                                    .filter(
+                                      (l) =>
+                                        l.text.trim() !== "" &&
+                                        !l.isStepSeparator
+                                    ).length
+                                : ""}
+                            </span>
+
+                            {lineObj.isStepSeparator ? (
+                              <span className="text-cyan-400 font-semibold bg-gray-800/50 px-2 py-1 rounded">
+                                {lineObj.text}
+                              </span>
+                            ) : lineObj.text.startsWith("//") &&
+                              !lineObj.isStepSeparator ? (
+                              <span className="text-gray-500 italic">
+                                <span className="text-gray-600"> </span>
+                                {lineObj.text}
+                              </span>
+                            ) : (
+                              <>
+                                <span
+                                  className={`${
+                                    lineObj.isNew
+                                      ? "text-green-400 font-semibold"
+                                      : "text-gray-600"
+                                  }`}
+                                >
+                                  {lineObj.isNew ? "+" : " "}
+                                </span>
+                                <span
+                                  className={`ml-1 ${
+                                    lineObj.isNew
+                                      ? "text-gray-100 font-medium"
+                                      : "text-gray-500"
+                                  }`}
+                                >
+                                  {lineObj.text}
+                                </span>
+                              </>
+                            )}
                           </div>
-                        )
-                      )}
-                    </code>
-                  </pre>
+                        ))}
+                      </code>
+                    </pre>
+
+                    {/* Scroll indicator */}
+                    <div
+                      className={`absolute top-2 right-2 text-xs px-2 py-1 rounded transition-all duration-300 ${
+                        isScrolling
+                          ? "bg-green-600/80 text-white"
+                          : "bg-gray-800/80 text-gray-500"
+                      }`}
+                    >
+                      {isScrolling
+                        ? "✨ Scrolling to new code..."
+                        : "Scroll to see all code"}
+                    </div>
+                  </div>
                   <div className="mt-4">
-                    <h4 className="text-sm font-semibold text-yellow-400 mb-2">
-                      Key Concepts:
-                    </h4>
-                    <ul className="text-sm text-gray-400 space-y-1">
-                      {currentStepData.codeChanges.explanations.map(
-                        (explanation, index) => (
-                          <li key={index} className="flex items-start gap-2">
-                            <span className="text-yellow-400 mt-1">•</span>
-                            {explanation}
-                          </li>
-                        )
-                      )}
-                    </ul>
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h4 className="text-sm font-semibold text-yellow-400 mb-2">
+                          Current Step - Key Concepts:
+                        </h4>
+                        <ul className="text-sm text-gray-400 space-y-1">
+                          {currentStepData.codeChanges.explanations.map(
+                            (explanation, index) => (
+                              <li
+                                key={index}
+                                className="flex items-start gap-2"
+                              >
+                                <span className="text-yellow-400 mt-1">•</span>
+                                {explanation}
+                              </li>
+                            )
+                          )}
+                        </ul>
+                      </div>
+                      <div className="text-right text-xs text-gray-500">
+                        <div>
+                          Total lines:{" "}
+                          {
+                            getCumulativeCode().filter(
+                              (l) => l.text.trim() !== ""
+                            ).length
+                          }
+                        </div>
+                        <div>
+                          New in this step:{" "}
+                          {
+                            currentStepData.codeChanges.additions.filter(
+                              (l) => l.trim() !== ""
+                            ).length
+                          }
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
