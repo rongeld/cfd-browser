@@ -18,9 +18,11 @@ import {
   BookOpen,
   Beaker,
   Plane,
+  HelpCircle,
 } from "lucide-react";
 import EducationalContent from "./components/EducationalContent";
 import AirfoilAnalyzer from "./components/AirfoilAnalyzer";
+import FAQSection from "./components/FAQSection";
 import { BuyMeACoffee } from "@kanokpit.y/buy-me-a-coffee";
 
 const CFDSimulator = () => {
@@ -52,7 +54,7 @@ const CFDSimulator = () => {
 
   const [visualizationMode, setVisualizationMode] = useState("standard"); // 'standard', 'pressure', or 'smoke'
   const [quality, setQuality] = useState("medium"); // 'low', 'medium', 'high', 'ultra'
-  const [activeTab, setActiveTab] = useState("simulator"); // 'simulator', 'learn', or 'airfoil'
+  const [activeTab, setActiveTab] = useState("simulator"); // 'simulator', 'learn', 'airfoil', or 'faq'
   const [currentBezier, setCurrentBezier] = useState<
     { x: number; y: number }[]
   >([]);
@@ -1970,6 +1972,17 @@ const CFDSimulator = () => {
                 <Plane className="w-4 h-4" />
                 Airfoil
               </button>
+              <button
+                onClick={() => setActiveTab("faq")}
+                className={`px-6 py-2 rounded-md transition-colors flex items-center gap-2 ${
+                  activeTab === "faq"
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-300 hover:text-white"
+                }`}
+              >
+                <HelpCircle className="w-4 h-4" />
+                FAQ
+              </button>
               <BuyMeACoffee slug="rongeld" />
             </div>
           </div>
@@ -1987,6 +2000,8 @@ const CFDSimulator = () => {
           <div className="max-w-6xl mx-auto">
             <AirfoilAnalyzer />
           </div>
+        ) : activeTab === "faq" ? (
+          <FAQSection />
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
             {/* Main Canvas */}
