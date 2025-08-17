@@ -1052,7 +1052,7 @@ const FAQSection: React.FC<FAQSectionProps> = ({ className = "" }) => {
           <div className="bg-gray-700 p-3 rounded text-sm font-mono mb-3">
             # Clone repository
             <br />
-            git clone &lt;https://github.com/rongeld/cfd-browser&gt;
+            git clone https://github.com/rongeld/cfd-browser
             <br />
             cd cfd-simulator
             <br />
