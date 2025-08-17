@@ -19,10 +19,12 @@ import {
   Beaker,
   Plane,
   HelpCircle,
+  Wrench,
 } from "lucide-react";
 import EducationalContent from "./components/EducationalContent";
 import AirfoilAnalyzer from "./components/AirfoilAnalyzer";
 import FAQSection from "./components/FAQSection";
+import InteractiveCFDBuilder from "./components/InteractiveCFDBuilder";
 import { BuyMeACoffee } from "@kanokpit.y/buy-me-a-coffee";
 
 const CFDSimulator = () => {
@@ -54,7 +56,7 @@ const CFDSimulator = () => {
 
   const [visualizationMode, setVisualizationMode] = useState("standard"); // 'standard', 'pressure', or 'smoke'
   const [quality, setQuality] = useState("medium"); // 'low', 'medium', 'high', 'ultra'
-  const [activeTab, setActiveTab] = useState("simulator"); // 'simulator', 'learn', 'airfoil', or 'faq'
+  const [activeTab, setActiveTab] = useState("simulator"); // 'simulator', 'learn', 'build', 'airfoil', or 'faq'
   const [currentBezier, setCurrentBezier] = useState<
     { x: number; y: number }[]
   >([]);
@@ -1962,6 +1964,17 @@ const CFDSimulator = () => {
                 Learn CFD
               </button>
               <button
+                onClick={() => setActiveTab("build")}
+                className={`px-6 py-2 rounded-md transition-colors flex items-center gap-2 ${
+                  activeTab === "build"
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-300 hover:text-white"
+                }`}
+              >
+                <Wrench className="w-4 h-4" />
+                Build Own CFD
+              </button>
+              <button
                 onClick={() => setActiveTab("airfoil")}
                 className={`px-6 py-2 rounded-md transition-colors flex items-center gap-2 ${
                   activeTab === "airfoil"
@@ -1996,6 +2009,8 @@ const CFDSimulator = () => {
               gridHeight={GRID_HEIGHT}
             />
           </div>
+        ) : activeTab === "build" ? (
+          <InteractiveCFDBuilder />
         ) : activeTab === "airfoil" ? (
           <div className="max-w-6xl mx-auto">
             <AirfoilAnalyzer />
