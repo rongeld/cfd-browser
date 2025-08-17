@@ -1138,7 +1138,7 @@ const getFlowDescription = (Re) => {
 ```bash
 # Clone repository
 git clone https://github.com/rongeld/cfd-browser
-cd cfd-simulator
+cd cfd-browser
 
 # Install dependencies
 npm install
@@ -1802,7 +1802,7 @@ This comprehensive guide provides the complete foundation for building a CFD sim
 for (let i = 0; i < GRID*WIDTH; i++) {
 for (let j = 0; j < GRID_HEIGHT; j++) {
 if (obstacles[j * GRID_WIDTH + i]) {
-ctx.fillRect(i * CELL*SIZE, j * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+ctx.fillRect(i * CELL*SIZE, j \* CELL_SIZE, CELL_SIZE, CELL_SIZE);
 }
 }
 }

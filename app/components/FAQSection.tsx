@@ -1054,7 +1054,7 @@ const FAQSection: React.FC<FAQSectionProps> = ({ className = "" }) => {
             <br />
             git clone https://github.com/rongeld/cfd-browser
             <br />
-            cd cfd-simulator
+            cd cfd-browser
             <br />
             <br />
             # Install dependencies
