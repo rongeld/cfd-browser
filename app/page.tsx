@@ -61,6 +61,15 @@ const CFDSimulator = () => {
     { x: number; y: number }[]
   >([]);
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0); // 0.5x, 1x, 1.25x, 1.5x, 2x
+  const [isSmallScreen, setIsSmallScreen] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 640px)");
+    const update = () => setIsSmallScreen(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
   const [colorMode, setColorMode] = useState("speed"); // 'speed' or 'pressure'
   const [smokeColorMode, setSmokeColorMode] = useState("grayscale"); // 'grayscale', 'thermal', 'rainbow', 'plasma'
   const [showScale, setShowScale] = useState(true);
@@ -110,12 +119,13 @@ const CFDSimulator = () => {
       ultra: { width: 300, height: 200, cellSize: 4 },
     };
     const settings = qualitySettings[quality];
+    const rowMultiplier = isSmallScreen ? 1.6 : 1.0; // add more rows on small screens
     return {
       GRID_WIDTH: settings.width,
-      GRID_HEIGHT: settings.height,
+      GRID_HEIGHT: Math.round(settings.height * rowMultiplier),
       CELL_SIZE: settings.cellSize,
     };
-  }, [quality]);
+  }, [quality, isSmallScreen]);
 
   // Physical dimensions of the simulation domain
   const PHYSICAL_DIMENSIONS = useMemo(() => {
@@ -2254,34 +2264,6 @@ const CFDSimulator = () => {
                         4x
                       </button>
                     </div>
-
-                    <button
-                      onClick={handlePlayPause}
-                      className={`px-4 py-2 rounded-lg flex items-center gap-2 ${
-                        isRunning
-                          ? "bg-red-600 hover:bg-red-700"
-                          : "bg-green-600 hover:bg-green-700"
-                      } transition-colors`}
-                    >
-                      {isRunning ? (
-                        <Pause className="w-4 h-4" />
-                      ) : (
-                        <Play className="w-4 h-4" />
-                      )}
-                      {isRunning ? "Pause" : "Play"}
-                      {playbackSpeed !== 1.0 && (
-                        <span className="text-xs opacity-75">
-                          {playbackSpeed}x
-                        </span>
-                      )}
-                    </button>
-                    <button
-                      onClick={handleReset}
-                      className="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg flex items-center gap-2 transition-colors"
-                    >
-                      <RotateCcw className="w-4 h-4" />
-                      Reset
-                    </button>
                   </div>
                 </div>
                 <div className="bg-black rounded-lg overflow-hidden relative">
@@ -2330,6 +2312,219 @@ const CFDSimulator = () => {
                     )}
                     {drawingMode === "none" &&
                       "🔍 Click anywhere to analyze flow data"}
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-4">
+                  <button
+                    onClick={handlePlayPause}
+                    className={`px-4 py-2 rounded-lg flex items-center gap-2 ${
+                      isRunning
+                        ? "bg-red-600 hover:bg-red-700"
+                        : "bg-green-600 hover:bg-green-700"
+                    } transition-colors`}
+                  >
+                    {isRunning ? (
+                      <Pause className="w-4 h-4" />
+                    ) : (
+                      <Play className="w-4 h-4" />
+                    )}
+                    {isRunning ? "Pause" : "Play"}
+                    {playbackSpeed !== 1.0 && (
+                      <span className="text-xs opacity-75">
+                        {playbackSpeed}x
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    onClick={handleReset}
+                    className="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg flex items-center gap-2 transition-colors"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    Reset
+                  </button>
+                </div>
+                {/* Simulation Parameters (mobile) */}
+                <div className="bg-gray-800 rounded-lg p-4 mt-4 block lg:hidden">
+                  <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <Settings className="w-5 h-5" />
+                    Simulation Parameters
+                  </h3>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Simulation Quality
+                      </label>
+                      <select
+                        value={quality}
+                        onChange={(e) => setQuality(e.target.value)}
+                        className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white"
+                      >
+                        <option value="low">Low (80×40) - Fast</option>
+                        <option value="medium">
+                          Medium (120×60) - Balanced
+                        </option>
+                        <option value="high">High (160×80) - Detailed</option>
+                        <option value="ultra">Ultra (300×200) - Maximum</option>
+                      </select>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Higher quality = more accurate simulation but slower
+                        performance
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        {drawingMode === "bezier"
+                          ? "Curve Thickness"
+                          : "Brush Size"}
+                        : {brushSize}px
+                      </label>
+                      <input
+                        type="range"
+                        min="5"
+                        max="50"
+                        step="5"
+                        value={brushSize}
+                        onChange={(e) => setBrushSize(parseInt(e.target.value))}
+                        className="w-full"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Arrow Size: {settings.arrowSize.toFixed(1)}x
+                      </label>
+                      <input
+                        type="range"
+                        min="0.5"
+                        max="3.0"
+                        step="0.1"
+                        value={settings.arrowSize}
+                        onChange={(e) =>
+                          setSettings((prev) => ({
+                            ...prev,
+                            arrowSize: parseFloat(e.target.value),
+                          }))
+                        }
+                        className="w-full"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Wind Speed: {settings.windSpeed.toFixed(1)} m/s
+                      </label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="0.5"
+                        value={settings.windSpeed}
+                        onChange={(e) =>
+                          setSettings((prev) => ({
+                            ...prev,
+                            windSpeed: parseFloat(e.target.value),
+                          }))
+                        }
+                        className="w-full"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Domain: {PHYSICAL_DIMENSIONS.LENGTH}m ×{" "}
+                        {PHYSICAL_DIMENSIONS.HEIGHT}m | Grid:{" "}
+                        {PHYSICAL_DIMENSIONS.GRID_SPACING.toFixed(3)}m spacing
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Kinematic Viscosity:{" "}
+                        {settings.viscosity.toExponential(2)} m²/s
+                      </label>
+                      <input
+                        type="range"
+                        min="0.000001"
+                        max="0.0001"
+                        step="0.000001"
+                        value={settings.viscosity}
+                        onChange={(e) =>
+                          setSettings((prev) => ({
+                            ...prev,
+                            viscosity: parseFloat(e.target.value),
+                          }))
+                        }
+                        className="w-full"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Air: ~1.5×10⁻⁵ m²/s | Water: ~1×10⁻⁶ m²/s
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Reynolds Number: {getReynoldsNumber().toFixed(0)}
+                      </label>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {getReynoldsNumber() < 1 &&
+                          "Creeping flow - viscous forces dominate"}
+                        {getReynoldsNumber() >= 1 &&
+                          getReynoldsNumber() < 40 &&
+                          "Steady laminar flow"}
+                        {getReynoldsNumber() >= 40 &&
+                          getReynoldsNumber() < 200 &&
+                          "Vortex shedding begins"}
+                        {getReynoldsNumber() >= 200 &&
+                          getReynoldsNumber() < 1000 &&
+                          "Turbulent wake"}
+                        {getReynoldsNumber() >= 1000 && "Fully turbulent flow"}
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Max Particles: {settings.particleCount}
+                      </label>
+                      <input
+                        type="range"
+                        min="500"
+                        max="50000"
+                        step="100"
+                        value={settings.particleCount}
+                        onChange={(e) =>
+                          setSettings((prev) => ({
+                            ...prev,
+                            particleCount: parseInt(e.target.value),
+                          }))
+                        }
+                        className="w-full"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Maximum number of particles in the domain
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Inlet Rate: {settings.particlesPerSecond} particles/sec
+                      </label>
+                      <input
+                        type="range"
+                        min="50"
+                        max="10000"
+                        step="10"
+                        value={settings.particlesPerSecond}
+                        onChange={(e) =>
+                          setSettings((prev) => ({
+                            ...prev,
+                            particlesPerSecond: parseInt(e.target.value),
+                          }))
+                        }
+                        className="w-full"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Particles generated per second at inlet
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
