@@ -1409,16 +1409,7 @@ const InteractiveCFDBuilder: React.FC = () => {
 
             {/* Controls */}
             <div className="bg-gray-800 rounded-lg p-6">
-              <div className="flex flex-wrap gap-3 justify-between items-center mb-4">
-                <button
-                  onClick={prevStep}
-                  disabled={currentStep === 0}
-                  className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg flex items-center gap-2"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                  Previous
-                </button>
-
+              <div className="justify-between items-center mb-4">
                 <div className="text-center">
                   <h3 className="text-lg font-semibold">
                     {currentStepData.title}
@@ -1428,14 +1419,25 @@ const InteractiveCFDBuilder: React.FC = () => {
                   </p>
                 </div>
 
-                <button
-                  onClick={nextStep}
-                  disabled={currentStep === steps.length - 1}
-                  className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg flex items-center gap-2"
-                >
-                  Next
-                  <ChevronRight className="w-4 h-4" />
-                </button>
+                <div className="flex gap-2 my-3 justify-between">
+                  <button
+                    onClick={prevStep}
+                    disabled={currentStep === 0}
+                    className="px-3 py-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg flex items-center gap-2"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    Previous
+                  </button>
+
+                  <button
+                    onClick={nextStep}
+                    disabled={currentStep === steps.length - 1}
+                    className="px-3 py-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg flex items-center gap-2"
+                  >
+                    Next
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
 
               {/* Progress Bar */}
