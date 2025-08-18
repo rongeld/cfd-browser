@@ -2151,7 +2151,7 @@ const CFDSimulator = () => {
                       onClick={() =>
                         setDrawingMode(drawingMode === "draw" ? "none" : "draw")
                       }
-                      className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-colors ${
+                      className={`px-3 py-2 rounded-lg ml-auto flex items-center gap-2 transition-colors ${
                         drawingMode === "draw"
                           ? "bg-red-600 hover:bg-red-700"
                           : "bg-gray-600 hover:bg-gray-700"
@@ -2212,58 +2212,6 @@ const CFDSimulator = () => {
                     >
                       Clear All
                     </button>
-                    <div className="flex gap-1 bg-gray-700 rounded-lg p-1">
-                      <button
-                        onClick={() => setPlaybackSpeed(0.5)}
-                        className={`px-2 py-1 rounded text-xs transition-colors ${
-                          playbackSpeed === 0.5
-                            ? "bg-blue-600 text-white"
-                            : "text-gray-300 hover:text-white"
-                        }`}
-                      >
-                        0.5x
-                      </button>
-                      <button
-                        onClick={() => setPlaybackSpeed(1.0)}
-                        className={`px-2 py-1 rounded text-xs transition-colors ${
-                          playbackSpeed === 1.0
-                            ? "bg-blue-600 text-white"
-                            : "text-gray-300 hover:text-white"
-                        }`}
-                      >
-                        1x
-                      </button>
-                      <button
-                        onClick={() => setPlaybackSpeed(1.25)}
-                        className={`px-2 py-1 rounded text-xs transition-colors ${
-                          playbackSpeed === 1.25
-                            ? "bg-blue-600 text-white"
-                            : "text-gray-300 hover:text-white"
-                        }`}
-                      >
-                        1.25x
-                      </button>
-                      <button
-                        onClick={() => setPlaybackSpeed(1.5)}
-                        className={`px-2 py-1 rounded text-xs transition-colors ${
-                          playbackSpeed === 1.5
-                            ? "bg-blue-600 text-white"
-                            : "text-gray-300 hover:text-white"
-                        }`}
-                      >
-                        1.5x
-                      </button>
-                      <button
-                        onClick={() => setPlaybackSpeed(4.0)}
-                        className={`px-2 py-1 rounded text-xs transition-colors ${
-                          playbackSpeed === 4.0
-                            ? "bg-blue-600 text-white"
-                            : "text-gray-300 hover:text-white"
-                        }`}
-                      >
-                        4x
-                      </button>
-                    </div>
                   </div>
                 </div>
                 <div className="bg-black rounded-lg overflow-hidden relative">
@@ -2314,7 +2262,7 @@ const CFDSimulator = () => {
                       "🔍 Click anywhere to analyze flow data"}
                   </div>
                 </div>
-                <div className="flex gap-2 mt-4">
+                <div className="flex gap-2 mt-4 flex-wrap">
                   <button
                     onClick={handlePlayPause}
                     className={`px-4 py-2 rounded-lg flex items-center gap-2 ${
@@ -2342,6 +2290,58 @@ const CFDSimulator = () => {
                     <RotateCcw className="w-4 h-4" />
                     Reset
                   </button>
+                  <div className="flex gap-1 bg-gray-700 rounded-lg p-1 ml-auto">
+                    <button
+                      onClick={() => setPlaybackSpeed(0.5)}
+                      className={`px-2 py-1 rounded text-xs transition-colors ${
+                        playbackSpeed === 0.5
+                          ? "bg-blue-600 text-white"
+                          : "text-gray-300 hover:text-white"
+                      }`}
+                    >
+                      0.5x
+                    </button>
+                    <button
+                      onClick={() => setPlaybackSpeed(1.0)}
+                      className={`px-2 py-1 rounded text-xs transition-colors ${
+                        playbackSpeed === 1.0
+                          ? "bg-blue-600 text-white"
+                          : "text-gray-300 hover:text-white"
+                      }`}
+                    >
+                      1x
+                    </button>
+                    <button
+                      onClick={() => setPlaybackSpeed(1.25)}
+                      className={`px-2 py-1 rounded text-xs transition-colors ${
+                        playbackSpeed === 1.25
+                          ? "bg-blue-600 text-white"
+                          : "text-gray-300 hover:text-white"
+                      }`}
+                    >
+                      1.25x
+                    </button>
+                    <button
+                      onClick={() => setPlaybackSpeed(1.5)}
+                      className={`px-2 py-1 rounded text-xs transition-colors ${
+                        playbackSpeed === 1.5
+                          ? "bg-blue-600 text-white"
+                          : "text-gray-300 hover:text-white"
+                      }`}
+                    >
+                      1.5x
+                    </button>
+                    <button
+                      onClick={() => setPlaybackSpeed(4.0)}
+                      className={`px-2 py-1 rounded text-xs transition-colors ${
+                        playbackSpeed === 4.0
+                          ? "bg-blue-600 text-white"
+                          : "text-gray-300 hover:text-white"
+                      }`}
+                    >
+                      4x
+                    </button>
+                  </div>
                 </div>
                 {/* Simulation Parameters (mobile) */}
                 <div className="bg-gray-800 rounded-lg p-4 mt-4 block lg:hidden">
