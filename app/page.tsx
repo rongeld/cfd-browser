@@ -1929,7 +1929,7 @@ const CFDSimulator = () => {
     <div className="min-h-screen bg-gray-900 text-white p-4">
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-6">
-          <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
+          <h1 className="text-3xl sm:text-4xl font-bold mb-2 bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
             CFD Fluid Dynamics Simulator
           </h1>
           <p className="text-gray-400">
@@ -1940,10 +1940,10 @@ const CFDSimulator = () => {
         {/* Tab Navigation */}
         <div className="mb-6">
           <div className="flex justify-center">
-            <div className="bg-gray-800 rounded-lg p-1 flex gap-1">
+            <div className="bg-gray-800 rounded-lg p-1 flex flex-wrap md:flex-nowrap gap-1 justify-center">
               <button
                 onClick={() => setActiveTab("simulator")}
-                className={`px-6 py-2 rounded-md transition-colors flex items-center gap-2 ${
+                className={`px-4 sm:px-6 py-2 text-sm sm:text-base rounded-md transition-colors flex items-center gap-2 ${
                   activeTab === "simulator"
                     ? "bg-blue-600 text-white"
                     : "text-gray-300 hover:text-white"
@@ -1954,7 +1954,7 @@ const CFDSimulator = () => {
               </button>
               <button
                 onClick={() => setActiveTab("learn")}
-                className={`px-6 py-2 rounded-md transition-colors flex items-center gap-2 ${
+                className={`px-4 sm:px-6 py-2 text-sm sm:text-base rounded-md transition-colors flex items-center gap-2 ${
                   activeTab === "learn"
                     ? "bg-blue-600 text-white"
                     : "text-gray-300 hover:text-white"
@@ -1965,7 +1965,7 @@ const CFDSimulator = () => {
               </button>
               <button
                 onClick={() => setActiveTab("build")}
-                className={`px-6 py-2 rounded-md transition-colors flex items-center gap-2 ${
+                className={`px-4 sm:px-6 py-2 text-sm sm:text-base rounded-md transition-colors flex items-center gap-2 ${
                   activeTab === "build"
                     ? "bg-blue-600 text-white"
                     : "text-gray-300 hover:text-white"
@@ -1976,7 +1976,7 @@ const CFDSimulator = () => {
               </button>
               <button
                 onClick={() => setActiveTab("airfoil")}
-                className={`px-6 py-2 rounded-md transition-colors flex items-center gap-2 ${
+                className={`px-4 sm:px-6 py-2 text-sm sm:text-base rounded-md transition-colors flex items-center gap-2 ${
                   activeTab === "airfoil"
                     ? "bg-blue-600 text-white"
                     : "text-gray-300 hover:text-white"
@@ -1987,7 +1987,7 @@ const CFDSimulator = () => {
               </button>
               <button
                 onClick={() => setActiveTab("faq")}
-                className={`px-6 py-2 rounded-md transition-colors flex items-center gap-2 ${
+                className={`px-4 sm:px-6 py-2 text-sm sm:text-base rounded-md transition-colors flex items-center gap-2 ${
                   activeTab === "faq"
                     ? "bg-blue-600 text-white"
                     : "text-gray-300 hover:text-white"

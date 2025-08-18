@@ -330,27 +330,27 @@ const AirfoilAnalyzer: React.FC = () => {
     const referenceChord = 1.0; // Assume 1m chord for calculation
     const kinematicViscosity = 1.81e-5; // Air at sea level (m²/s)
     const Re = (windSpeed * referenceChord) / kinematicViscosity;
-    
+
     // More pronounced Reynolds number effects for better visibility
     let ReCorrection = 1.0;
     let CdReCorrection = 1.0;
-    
+
     if (Re < 100000) {
       // Very low Reynolds (< 100k) - significant performance loss
       ReCorrection = 0.6 + 0.4 * (Re / 100000);
       CdReCorrection = 2.0 - 1.0 * (Re / 100000);
     } else if (Re < 500000) {
       // Low Reynolds (100k-500k) - moderate performance reduction
-      ReCorrection = 0.8 + 0.2 * (Re - 100000) / 400000;
-      CdReCorrection = 1.5 - 0.3 * (Re - 100000) / 400000;
+      ReCorrection = 0.8 + (0.2 * (Re - 100000)) / 400000;
+      CdReCorrection = 1.5 - (0.3 * (Re - 100000)) / 400000;
     } else if (Re < 1000000) {
       // Medium Reynolds (500k-1M) - approaching optimal
-      ReCorrection = 1.0 + 0.05 * (Re - 500000) / 500000;
-      CdReCorrection = 1.2 - 0.15 * (Re - 500000) / 500000;
+      ReCorrection = 1.0 + (0.05 * (Re - 500000)) / 500000;
+      CdReCorrection = 1.2 - (0.15 * (Re - 500000)) / 500000;
     } else if (Re < 3000000) {
       // High Reynolds (1M-3M) - optimal range
-      ReCorrection = 1.05 + 0.02 * (Re - 1000000) / 2000000;
-      CdReCorrection = 1.05 - 0.05 * (Re - 1000000) / 2000000;
+      ReCorrection = 1.05 + (0.02 * (Re - 1000000)) / 2000000;
+      CdReCorrection = 1.05 - (0.05 * (Re - 1000000)) / 2000000;
     } else {
       // Very high Reynolds (> 3M) - diminishing returns
       ReCorrection = 1.07;
@@ -364,12 +364,12 @@ const AirfoilAnalyzer: React.FC = () => {
     // Add compressibility effects for high speeds (Mach number effects)
     const speedOfSound = 343; // m/s at sea level
     const machNumber = windSpeed / speedOfSound;
-    
+
     if (machNumber > 0.3) {
       // Compressibility drag rise starts around Mach 0.3-0.4
       const compressibilityDrag = 0.01 * Math.pow(machNumber - 0.3, 2);
       Cd += compressibilityDrag;
-      
+
       // Shock-induced flow changes affect lift curve slope
       if (machNumber > 0.7) {
         const shockEffect = 1 - 0.2 * (machNumber - 0.7);
@@ -378,7 +378,9 @@ const AirfoilAnalyzer: React.FC = () => {
     }
 
     console.log(
-      `Reynolds: ${Re.toExponential(2)}, Mach: ${machNumber.toFixed(3)}, Wind: ${windSpeed} m/s`
+      `Reynolds: ${Re.toExponential(2)}, Mach: ${machNumber.toFixed(
+        3
+      )}, Wind: ${windSpeed} m/s`
     );
 
     const newCoefficient: AerodynamicCoefficients = {
@@ -1033,18 +1035,20 @@ const AirfoilAnalyzer: React.FC = () => {
     <div className="bg-gray-800 rounded-lg p-6">
       <div className="flex items-center gap-3 mb-6">
         <Plane className="w-6 h-6 text-blue-400" />
-        <h2 className="text-2xl font-bold text-white">Airfoil Analyzer</h2>
+        <h2 className="text-xl sm:text-2xl font-bold text-white">
+          Airfoil Analyzer
+        </h2>
       </div>
 
       {/* Airfoil Input */}
       <div className="mb-6">
-        <div className="flex gap-3 mb-4">
+        <div className="flex flex-wrap gap-3 mb-4">
           <input
             type="text"
             value={airfoilName}
             onChange={(e) => setAirfoilName(e.target.value)}
             placeholder="Enter airfoil name (e.g., naca2412-il)"
-            className="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white placeholder-gray-400"
+            className="min-w-0 flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white placeholder-gray-400"
           />
           <button
             onClick={fetchAirfoilData}
@@ -1063,7 +1067,7 @@ const AirfoilAnalyzer: React.FC = () => {
               </>
             )}
           </button>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={async () => {
                 setAirfoilName("naca2412-il");
@@ -1262,7 +1266,7 @@ const AirfoilAnalyzer: React.FC = () => {
             <h3 className="text-lg font-semibold text-white">
               Airfoil: {airfoilData.name}
             </h3>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <button
                 onClick={() => {
                   setShowClCdGraph(false);
@@ -1305,13 +1309,16 @@ const AirfoilAnalyzer: React.FC = () => {
           </div>
 
           <div className="bg-black rounded-lg overflow-hidden">
-            <canvas ref={canvasRef} className="w-full h-auto max-h-[600px]" />
+            <canvas
+              ref={canvasRef}
+              className="w-full h-auto max-h-[400px] sm:max-h-[600px]"
+            />
           </div>
 
           {/* Controls */}
           {airfoilData && (
             <div className="my-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
                 {/* Angle of Attack Control */}
                 <div>
                   <h4 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">

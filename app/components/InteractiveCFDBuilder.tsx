@@ -104,8 +104,8 @@ const InteractiveCFDBuilder: React.FC = () => {
       // Find the first highlighted element that has non-empty text content
       for (let i = 0; i < highlightedElements.length; i++) {
         const element = highlightedElements[i] as HTMLElement;
-        const textContent = element.textContent?.trim() || '';
-        if (textContent !== '' && !textContent.startsWith('//')) {
+        const textContent = element.textContent?.trim() || "";
+        if (textContent !== "" && !textContent.startsWith("//")) {
           targetElement = element;
           break;
         }
@@ -116,7 +116,7 @@ const InteractiveCFDBuilder: React.FC = () => {
 
         // Calculate scroll position - we want to show the new content near the top
         const elementOffsetTop = (targetElement as HTMLElement).offsetTop;
-        
+
         // Target position: show new code about 60px from the top of visible area
         const targetScrollTop = elementOffsetTop - 60;
 
@@ -1343,13 +1343,13 @@ const InteractiveCFDBuilder: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
+          <h1 className="text-3xl sm:text-4xl font-bold mb-4 bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
             Build Your Own CFD Solver
           </h1>
-          <p className="text-gray-400 text-lg">
+          <p className="text-gray-400 text-base sm:text-lg">
             Learn CFD by building a fluid dynamics simulator step by step
           </p>
-          <div className="mt-4 flex justify-center gap-4">
+          <div className="mt-4 flex flex-wrap justify-center gap-2 sm:gap-4">
             <span className="bg-blue-600/20 text-blue-400 px-3 py-1 rounded-full text-sm">
               Step {currentStep + 1} of {steps.length}
             </span>
@@ -1362,17 +1362,17 @@ const InteractiveCFDBuilder: React.FC = () => {
           </div>
         </div>{" "}
         {/* Main Layout */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 xl:gap-8">
           {/* Left Column - Visualization */}
           <div className="space-y-6">
             {/* Canvas */}
             <div className="bg-gray-800 rounded-lg p-6">
-              <div className="flex justify-between items-center mb-4">
+              <div className="flex flex-wrap gap-3 justify-between items-center mb-4">
                 <h2 className="text-xl font-semibold flex items-center gap-2">
                   <Eye className="w-5 h-5" />
                   Live Simulation
                 </h2>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   <button
                     onClick={toggleSimulation}
                     className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-colors ${
@@ -1409,7 +1409,7 @@ const InteractiveCFDBuilder: React.FC = () => {
 
             {/* Controls */}
             <div className="bg-gray-800 rounded-lg p-6">
-              <div className="flex justify-between items-center mb-4">
+              <div className="flex flex-wrap gap-3 justify-between items-center mb-4">
                 <button
                   onClick={prevStep}
                   disabled={currentStep === 0}
@@ -1473,7 +1473,7 @@ const InteractiveCFDBuilder: React.FC = () => {
           {/* Right Column - Content */}
           <div className="space-y-6">
             {/* Toggle Buttons */}
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <button
                 onClick={() => setShowPhysics(!showPhysics)}
                 className={`px-4 py-2 rounded-lg flex items-center gap-2 ${
@@ -1519,13 +1519,13 @@ const InteractiveCFDBuilder: React.FC = () => {
                     </span>
                   </h3>
                 </div>
-                <div className="p-6">
+                <div className="p-4 sm:p-6">
                   <div
                     ref={codeScrollRef}
-                    className="bg-gray-900 rounded-lg p-4 pl-12 max-h-96 overflow-y-auto overflow-x-auto relative"
+                    className="bg-gray-900 rounded-lg p-3 sm:p-4 sm:pl-12 max-h-64 sm:max-h-96 overflow-y-auto overflow-x-auto relative"
                   >
                     <pre>
-                      <code className="text-sm">
+                      <code className="text-xs sm:text-sm">
                         {getCumulativeCode().map((lineObj, index) => (
                           <div
                             key={index}
